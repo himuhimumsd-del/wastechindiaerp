@@ -1,0 +1,7 @@
+const fs = require('fs');
+const content = fs.readFileSync('frontend/app.js', 'utf8');
+const lines = content.split('\n');
+
+for (let i = 7215; i <= 7255; i++) {
+  console.log(`${i}: ${lines[i-1]}`);
+}

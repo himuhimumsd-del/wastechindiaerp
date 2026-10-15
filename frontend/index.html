@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wastech - Enterprise Waste Management & Recycling ERP</title>
+    <link rel="icon" type="image/png" href="assets/wastech-logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="flex h-screen text-gray-800">
+
+    <!-- Sidebar -->
+    <aside id="sidebar" class="w-64 md:w-64 shrink-0 bg-erp-main text-white flex flex-col h-full transition-all duration-300 z-40 absolute md:relative -left-64 md:left-0 shadow-xl">
+        <div id="sidebar-header" class="h-20 flex items-center px-4 border-b border-emerald-900/30 justify-between overflow-hidden bg-white shadow-sm transition-all duration-300">
+            <div class="flex items-center gap-2 overflow-hidden py-1 flex-1">
+                <div id="sidebar-logo-slot" class="shrink-0 flex items-center justify-start overflow-hidden">
+                    <img src="assets/wastech-logo-clean.png" alt="Wastech Logo" class="h-10 w-auto max-w-[155px] object-contain transition-all duration-300">
+                </div>
+                <div class="sidebar-text flex items-center overflow-hidden">
+                    <span class="text-[10px] font-black text-amber-700 uppercase tracking-widest bg-amber-100/80 border border-amber-300 px-1.5 py-0.5 rounded shadow-xs">ERP</span>
+                </div>
+            </div>
+            <button id="closeSidebar" class="md:hidden text-gray-500 hover:text-emerald-700 p-1.5 rounded-lg"><i class="fa-solid fa-times text-lg"></i></button>
+        </div>
+        <div class="flex-1 overflow-y-auto hide-scrollbar py-4" id="nav-container"></div>
+        <div id="sidebar-footer" class="p-4 border-t border-erp-hover text-xs text-center text-green-200 whitespace-nowrap overflow-hidden">&copy; 2026 Wastech ERP &bull; Zero Waste Living</div>
+    </aside>
+
+    <!-- Mobile Sidebar Overlay -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-30 hidden md:hidden transition-opacity duration-300 opacity-0"></div>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col h-full w-full overflow-hidden relative">
+        <header class="h-16 bg-white shadow-sm flex items-center justify-between px-4 lg:px-8 z-10 relative">
+            <div class="flex items-center">
+                <button id="sidebarToggleBtn" class="mr-4 text-gray-600 hover:text-erp-main text-xl transition-colors"><i class="fa-solid fa-bars"></i></button>
+                <h1 id="page-title" class="text-lg md:text-xl font-semibold text-gray-800 truncate max-w-[120px] md:max-w-full">Dashboard</h1>
+            </div>
+            <div class="flex items-center gap-2 md:gap-4">
+                <div class="hidden sm:block text-sm text-gray-500 font-medium"><i class="fa-regular fa-clock mr-1"></i> <span id="clock"></span></div>
+                <div class="hidden sm:block h-8 w-px bg-gray-200 mx-1 md:mx-2"></div>
+                
+                <div class="flex items-center gap-1 md:gap-2 mr-1 md:mr-2 md:border-r md:pr-4" id="plant-selector-container">
+                    <label class="hidden md:block text-xs font-bold text-erp-main uppercase">Plant Context:</label>
+                    <select id="company-select" class="text-xs md:text-sm bg-erp-light border border-erp-main text-erp-dark rounded px-1.5 md:px-2 py-1 focus:outline-none font-bold w-24 md:max-w-[180px] truncate"></select>
+                </div>
+
+                <div class="relative hidden md:flex items-center gap-1 mr-2 md:border-r md:pr-4 cursor-pointer" id="fy-badge-container" onclick="toggleChangePeriod()">
+                    <i class="fa-solid fa-calendar-days text-gray-400 text-xs"></i>
+                    <span id="fy-badge" class="text-xs font-bold text-gray-600"></span>
+                    <i class="fa-solid fa-chevron-down text-gray-400 text-[8px] ml-0.5"></i>
+                    <div id="change-period-dropdown" class="hidden absolute top-full right-0 mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-100 z-50 text-left" onclick="event.stopPropagation()">
+                        <div class="px-4 py-3 border-b border-gray-100"><p class="font-bold text-sm text-gray-800">Change Period</p><p class="text-[10px] text-gray-500">Switch which records you're viewing & entering, without changing today's date.</p></div>
+                        <div class="px-3 pt-3 pb-2 border-b border-gray-100">
+                            <p class="text-[10px] font-bold text-gray-500 uppercase mb-1">Current Date</p>
+                            <p class="text-[10px] text-gray-400 mb-1.5">The date new records get by default — set this to back-date entries.</p>
+                            <div class="flex gap-1">
+                                <input type="date" id="change-current-date" class="flex-1 p-1.5 border border-gray-300 rounded text-xs">
+                                <button onclick="applyCurrentDate()" class="px-2 bg-erp-main text-white text-xs font-bold rounded hover:bg-erp-hover">Set</button>
+                                <button onclick="resetCurrentDate()" title="Reset to today" class="px-2 bg-gray-100 text-gray-600 text-xs font-bold rounded hover:bg-gray-200"><i class="fa-solid fa-rotate-left"></i></button>
+                            </div>
+                        </div>
+                        <div class="p-3" id="change-period-fy-list"></div>
+                        <div class="px-3 pb-3">
+                            <p class="text-[10px] font-bold text-gray-500 uppercase mb-1">Custom Range</p>
+                            <div class="flex gap-1 mb-2">
+                                <input type="date" id="change-period-from" class="w-1/2 p-1.5 border border-gray-300 rounded text-xs">
+                                <input type="date" id="change-period-to" class="w-1/2 p-1.5 border border-gray-300 rounded text-xs">
+                            </div>
+                            <button onclick="applyCustomPeriod()" class="w-full py-1.5 bg-erp-main text-white text-xs font-bold rounded hover:bg-erp-hover">Apply Custom Range</button>
+                        </div>
+                        <div class="border-t border-gray-100 px-3 py-2 flex items-center justify-between">
+                            <label class="text-xs text-gray-600 flex items-center gap-1.5"><input type="checkbox" id="show-all-periods-toggle" onchange="toggleShowAllPeriods(this.checked)"> Show all periods everywhere</label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="relative cursor-pointer mr-1 md:mr-0" onclick="toggleNotifications()">
+                    <i class="fa-solid fa-bell text-gray-500 hover:text-erp-main text-lg md:text-xl transition-colors"></i>
+                    <span id="notif-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-bold h-4 w-4 flex items-center justify-center rounded-full border border-white"></span>
+                    <div id="notif-dropdown" class="hidden absolute right-0 md:-right-4 mt-3 w-72 md:w-80 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden transform origin-top-right transition-all">
+                        <div class="bg-gray-50 px-4 py-3 border-b border-gray-100 font-bold text-gray-700 flex justify-between items-center">
+                            Notifications <span class="text-xs bg-erp-light text-erp-main px-2 py-0.5 rounded font-medium">New</span>
+                        </div>
+                        <div class="max-h-64 overflow-y-auto" id="notif-list"></div>
+                        <div onclick="markAllNotificationsRead()" class="bg-gray-50 px-4 py-2 text-center text-xs font-bold text-erp-main hover:bg-gray-100 transition-colors border-t border-gray-100 cursor-pointer">Mark all as read</div>
+                    </div>
+                </div>
+                <div class="hidden md:block h-8 w-px bg-gray-200 mx-2"></div>
+
+                <div class="flex items-center gap-2" id="auth-user-badge-container">
+                    <div id="auth-user-display" class="hidden sm:flex flex-col text-right">
+                        <span id="auth-username" class="text-xs font-bold text-gray-800"></span>
+                        <span id="auth-role" class="text-[10px] text-gray-500"></span>
+                    </div>
+                    <button id="btn-logout" type="button" onclick="logoutUser()"
+                        class="text-xs bg-red-50 text-red-700 hover:bg-red-100 font-bold border border-red-200 rounded px-2 py-1 transition-colors flex items-center gap-1">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                        <span class="hidden md:inline">Logout</span>
+                    </button>
+                </div>
+                
+                <div class="h-8 w-8 md:h-10 md:w-10 rounded-full bg-erp-light text-erp-main flex items-center justify-center font-bold border border-erp-main shrink-0" id="user-avatar-icon">
+                    <i class="fa-solid fa-user-shield text-sm md:text-base"></i>
+                </div>
+            </div>
+        </header>
+
+        <div id="content-area" class="flex-1 overflow-y-auto p-4 lg:p-8 bg-erp-bg"></div>
+    </main>
+
+    <!-- ALL MODALS -->
+
+    <!-- Real Authentication Modal (Stage 1) -->
+    <div id="login-modal" class="fixed inset-0 z-[100] hidden flex items-center justify-center p-4">
+        <div class="wastech-auth-card">
+            
+            <!-- Modal Header with Clean Wastech Branding -->
+            <div class="wastech-auth-header">
+                <div class="wastech-auth-logo-badge">
+                    <img src="assets/wastech-logo-clean.png" alt="Wastech Logo">
+                </div>
+                <div>
+                    <span class="wastech-auth-pill">Enterprise ERP Portal</span>
+                </div>
+                <p class="wastech-auth-subtitle">Aspiring to Zero Waste Living &bull; Authorized Access</p>
+            </div>
+
+            <!-- Sign In Sub-view -->
+            <form id="login-form" class="wastech-auth-body">
+                <div id="login-error" class="hidden wastech-auth-error"></div>
+                
+                <div class="wastech-form-group">
+                    <label for="login-email" class="wastech-label">Work Email Address</label>
+                    <div class="wastech-input-wrapper">
+                        <i class="fa-solid fa-envelope wastech-input-icon"></i>
+                        <input id="login-email" type="email" required autocomplete="email" placeholder="name@company.com" class="wastech-input">
+                    </div>
+                </div>
+
+                <div class="wastech-form-group">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label for="login-password" class="wastech-label" style="margin-bottom: 0;">Password</label>
+                        <button type="button" id="forgot-password-link" style="background: none; border: none; padding: 0; font-size: 11.5px; font-weight: 700; color: #166534; cursor: pointer; text-decoration: underline;">Forgot Password?</button>
+                    </div>
+                    <div class="wastech-input-wrapper">
+                        <i class="fa-solid fa-lock wastech-input-icon"></i>
+                        <input id="login-password" type="password" required autocomplete="current-password" placeholder="••••••••" class="wastech-input">
+                        <button type="button" id="toggle-password-btn" aria-label="Toggle password visibility" class="wastech-input-btn">
+                            <i class="fa-solid fa-eye" id="toggle-password-icon"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button id="login-submit" type="submit" class="wastech-btn-primary">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    <span>Sign In to Plant</span>
+                </button>
+            </form>
+
+            <!-- Forgot Password Sub-view -->
+            <form id="forgot-password-form" class="wastech-auth-body hidden">
+                <div id="forgot-error" class="hidden wastech-auth-error"></div>
+                <div id="forgot-success" class="hidden wastech-auth-success"></div>
+                <p style="font-size: 12px; color: #4b5563; margin: 0 0 16px 0; font-weight: 500;">Enter your registered work email to receive password reset instructions.</p>
+                
+                <div class="wastech-form-group">
+                    <label for="forgot-email" class="wastech-label">Email Address</label>
+                    <div class="wastech-input-wrapper">
+                        <i class="fa-solid fa-envelope wastech-input-icon"></i>
+                        <input id="forgot-email" type="email" autocomplete="email" placeholder="name@company.com" class="wastech-input">
+                    </div>
+                </div>
+
+                <button id="forgot-submit" type="submit" class="wastech-btn-primary">
+                    <i class="fa-solid fa-paper-plane"></i>
+                    <span>Send Password Reset Link</span>
+                </button>
+                
+                <div style="text-align: center; margin-top: 16px;">
+                    <button type="button" id="back-to-login-btn" style="background: none; border: none; font-size: 12px; font-weight: 700; color: #4b5563; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                        <i class="fa-solid fa-arrow-left"></i> Back to Sign In
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Generic App Modal -->
+    <div id="app-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[70] hidden flex items-center justify-center backdrop-blur-sm p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col transform transition-all scale-95 opacity-0" id="modal-content">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl shrink-0">
+                <h3 class="text-lg font-bold text-gray-800" id="modal-title">Add Record</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-red-500 transition-colors"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto bg-white" id="modal-body"></div>
+            <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 rounded-b-xl shrink-0" id="modal-footer">
+                <button onclick="closeModal()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded shadow-sm hover:bg-gray-100 font-medium">Cancel</button>
+                <button onclick="saveRecord()" class="px-4 py-2 bg-erp-main text-white rounded shadow-sm hover:bg-erp-hover font-medium flex items-center gap-2"><i class="fa-solid fa-save"></i> Save Record</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Record Snapshot Modal (Audit) -->
+    <div id="audit-snapshot-modal" class="fixed inset-0 bg-black bg-opacity-60 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4 no-print">
+        <div class="bg-white rounded-xl w-full max-w-lg shadow-2xl transform transition-all scale-95 opacity-0 flex flex-col max-h-[90vh]" id="audit-snapshot-content">
+            <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl shrink-0">
+                <div>
+                    <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-magnifying-glass text-erp-main"></i> Record Snapshot</h3>
+                    <p class="text-xs text-gray-500 font-medium" id="snapshot-module-title">Module</p>
+                </div>
+                <button onclick="closeAuditSnapshot()" class="text-gray-400 hover:text-red-500 transition-colors"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div class="flex justify-between items-center mb-4 pb-2 border-b border-gray-100">
+                    <div>
+                        <p class="text-[10px] text-gray-500 uppercase font-bold tracking-wider">Record ID</p>
+                        <p class="font-bold text-gray-800 text-lg" id="snapshot-record-id">ID</p>
+                    </div>
+                    <div id="snapshot-action-badge"></div>
+                </div>
+                <div id="snapshot-details" class="mb-4"></div>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-100 bg-gray-50 rounded-b-xl shrink-0" id="snapshot-actions"></div>
+        </div>
+    </div>
+
+    <!-- Quick Employee Add Modal -->
+    <div id="quick-emp-modal" class="fixed inset-0 bg-black bg-opacity-60 z-[100] hidden flex items-center justify-center backdrop-blur-sm p-4 no-print">
+        <div class="bg-white rounded-lg p-6 w-full max-w-sm shadow-xl transform transition-all scale-95 opacity-0 flex flex-col" id="quick-emp-modal-content">
+            <h3 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2"><i class="fa-solid fa-user-plus mr-2 text-erp-main"></i> Quick Add Employee</h3>
+            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Full Name</label>
+            <input type="text" id="qe-name" class="w-full border border-gray-300 p-2 rounded mb-3 text-sm outline-none focus:border-erp-main">
+            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Department</label>
+            <input type="text" id="qe-dept" class="w-full border border-gray-300 p-2 rounded mb-3 text-sm outline-none focus:border-erp-main">
+            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Assigned Shift</label>
+            <select id="qe-shift" class="w-full border border-gray-300 p-2 rounded mb-5 text-sm outline-none focus:border-erp-main"></select>
+            <div class="flex justify-end gap-3 mt-auto">
+                <button onclick="closeQuickEmpModal()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-sm font-medium">Cancel</button>
+                <button onclick="saveQuickEmployee()" class="px-4 py-2 bg-erp-main text-white rounded hover:bg-erp-hover text-sm shadow font-medium"><i class="fa-solid fa-check mr-1"></i> Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Role Add Modal -->
+    <div id="quick-role-modal" class="fixed inset-0 bg-black bg-opacity-60 z-[100] hidden flex items-center justify-center backdrop-blur-sm p-4 no-print">
+        <div class="bg-white rounded-lg p-6 w-full max-w-sm shadow-xl transform transition-all scale-95 opacity-0 flex flex-col" id="quick-role-modal-content">
+            <h3 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2"><i class="fa-solid fa-key mr-2 text-erp-main"></i> Quick Add Role</h3>
+            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Role Title</label>
+            <input type="text" id="qr-name" class="w-full border border-gray-300 p-2 rounded mb-3 text-sm outline-none focus:border-erp-main">
+            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Description</label>
+            <input type="text" id="qr-desc" class="w-full border border-gray-300 p-2 rounded mb-3 text-sm outline-none focus:border-erp-main">
+            <div class="text-[10px] text-orange-600 bg-orange-50 p-2 rounded mb-4 border border-orange-200"><i class="fa-solid fa-circle-info"></i> Note: Permissions will be empty initially.</div>
+            <div class="flex justify-end gap-3 mt-auto">
+                <button onclick="closeQuickRoleModal()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded hover:bg-gray-50 text-sm font-medium">Cancel</button>
+                <button onclick="saveQuickRole()" class="px-4 py-2 bg-erp-main text-white rounded hover:bg-erp-hover text-sm shadow font-medium"><i class="fa-solid fa-check mr-1"></i> Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PO View Modal -->
+    <div id="po-view-modal" class="fixed inset-0 bg-black bg-opacity-75 z-[80] hidden flex items-center justify-center backdrop-blur-sm p-4 no-print">
+        <div class="bg-gray-100 rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col transform transition-all scale-95 opacity-0" id="po-view-modal-content">
+            <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-white rounded-t-xl shadow-sm z-10 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="h-10 w-10 bg-indigo-100 text-indigo-600 rounded flex items-center justify-center text-lg"><i class="fa-solid fa-file-invoice"></i></div>
+                    <div><h3 class="text-lg font-bold text-gray-800 leading-tight" id="po-view-title">PO Details</h3><p class="text-xs text-gray-500 font-medium">System View</p></div>
+                </div>
+                <button onclick="closePoView()" class="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 h-8 w-8 rounded flex items-center justify-center"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-4 lg:p-6" id="po-view-body"></div>
+        </div>
+    </div>
+
+    <!-- Tracking Modal -->
+    <div id="tracking-modal" class="fixed inset-0 bg-black bg-opacity-75 z-[80] hidden flex items-center justify-center backdrop-blur-sm p-4 no-print">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[90vh] flex flex-col transform transition-all scale-95 opacity-0" id="tracking-modal-content">
+            <div class="px-4 py-3 md:px-6 md:py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-xl shadow-sm z-10 shrink-0">
+                <div class="flex items-center gap-3">
+                    <div class="h-8 w-8 md:h-10 md:w-10 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-base md:text-lg shadow-inner"><i class="fa-solid fa-satellite-dish"></i></div>
+                    <div>
+                        <h3 class="text-base md:text-lg font-bold text-gray-800 leading-tight">GPS Control Tower</h3>
+                        <p class="text-[10px] md:text-xs text-gray-500 font-medium flex items-center gap-2"><span id="track-trip-id" class="font-bold text-erp-main">TRP-XXXX</span> <span class="h-1 w-1 bg-gray-300 rounded-full"></span> Live Telemetry Active</p>
+                    </div>
+                </div>
+                <button onclick="closeTrackingView()" class="text-gray-400 hover:text-red-500 bg-white hover:bg-red-50 border border-gray-200 h-8 w-8 rounded flex items-center justify-center transition-colors"><i class="fa-solid fa-times text-xl"></i></button>
+            </div>
+            
+            <div class="flex-1 overflow-hidden flex flex-col md:flex-row bg-gray-100 rounded-b-xl relative">
+                <!-- Map Area Wrapper -->
+                <div id="track-map-wrapper" class="flex-1 flex flex-col relative transition-all duration-300 bg-white z-[50] min-h-[350px] md:min-h-0">
+                    <!-- Map Expand Button -->
+                    <button onclick="toggleMapFullscreen()" class="absolute top-4 right-4 z-[400] bg-white text-gray-700 h-10 w-10 rounded shadow-md hover:text-erp-main flex items-center justify-center" title="Toggle Fullscreen"><i class="fa-solid fa-expand text-lg" id="map-expand-icon"></i></button>
+                    
+                    <!-- Interactive Leaflet Map -->
+                    <div id="track-map" class="flex-1 z-0 bg-blue-50"></div>
+                    
+                    <!-- Live Telemetry Bar Overlay -->
+                    <div class="absolute bottom-4 left-4 right-4 bg-white rounded-xl shadow-xl border border-gray-200 p-4 z-[400] flex justify-between items-center backdrop-blur-md bg-opacity-95 overflow-x-auto hide-scrollbar">
+                        <div class="flex gap-4 md:gap-8 items-center min-w-max pr-4">
+                            <div>
+                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1"><i class="fa-solid fa-location-crosshairs text-blue-500 mr-1"></i> Status</p>
+                                <h4 class="font-bold text-gray-800 text-sm whitespace-nowrap" id="track-live-status">Enroute to Plant</h4>
+                            </div>
+                            <div class="border-l border-gray-200 pl-4 md:pl-8">
+                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1"><i class="fa-solid fa-route text-erp-main mr-1"></i> Distance</p>
+                                <h4 class="font-bold text-gray-800 text-sm whitespace-nowrap" id="track-live-dist">45 KM</h4>
+                            </div>
+                            <div class="border-l border-gray-200 pl-4 md:pl-8">
+                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1"><i class="fa-regular fa-clock text-orange-500 mr-1"></i> ETA</p>
+                                <h4 class="font-bold text-gray-800 text-sm whitespace-nowrap" id="track-live-eta">1 hr 15 mins</h4>
+                            </div>
+                            <div class="border-l border-gray-200 pl-4 md:pl-8">
+                                <p class="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-1"><i class="fa-solid fa-gauge-high text-purple-500 mr-1"></i> Vitals</p>
+                                <h4 class="font-bold text-gray-800 text-sm whitespace-nowrap" id="track-live-vitals">45 km/h • Eng: ON</h4>
+                            </div>
+                        </div>
+                        <div class="text-right flex items-center gap-3 border-l border-gray-200 pl-4 md:ml-auto sticky right-0 bg-white shadow-[-10px_0_10px_-10px_rgba(0,0,0,0.1)]">
+                            <span class="hidden md:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-100 text-green-700 text-[10px] font-bold uppercase border border-green-200 whitespace-nowrap">
+                                <span class="h-1.5 w-1.5 rounded-full bg-green-500"></span> Last Sync: Just Now
+                            </span>
+                            <button onclick="refreshTracking(this)" class="h-8 w-8 rounded-full bg-gray-100 text-gray-600 hover:bg-blue-100 hover:text-blue-600 flex items-center justify-center transition-colors shadow-sm shrink-0" title="Refresh Live Location"><i class="fa-solid fa-rotate-right"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Deep Dive Details Sidebar -->
+                <div class="w-full md:w-[400px] border-t md:border-t-0 md:border-l border-gray-200 bg-white overflow-y-auto flex flex-col z-10 shadow-lg">
+                    <!-- Driver & Vehicle Details -->
+                    <div class="p-4 md:p-6 border-b border-gray-100 bg-gray-50 shrink-0">
+                        <div class="flex items-center gap-3 md:gap-4 mb-4">
+                            <div class="h-12 w-12 md:h-14 md:w-14 rounded-full bg-white border border-gray-200 flex items-center justify-center text-gray-400 text-xl md:text-2xl shadow-sm shrink-0"><i class="fa-solid fa-user-tie"></i></div>
+                            <div class="flex-1 min-w-0">
+                                <h4 class="font-bold text-gray-800 text-base md:text-lg leading-tight truncate" id="track-driver-name">Driver Name</h4>
+                                <div class="flex flex-wrap items-center gap-2 mt-1">
+                                    <span class="text-[10px] md:text-xs font-bold bg-white px-2 py-0.5 rounded border border-gray-200 shadow-sm whitespace-nowrap" id="track-vehicle-no">Vehicle No</span>
+                                    <span class="text-[10px] md:text-xs text-gray-600 font-medium flex items-center gap-1 whitespace-nowrap"><i class="fa-solid fa-phone text-[10px]"></i> <span id="track-driver-phone-text">9876543210</span> <button onclick="copyDriverPhone()" class="text-gray-400 hover:text-blue-600 px-1" title="Copy Number"><i class="fa-regular fa-copy"></i></button></span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 rounded-lg text-xs md:text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-1.5"><i class="fa-brands fa-whatsapp text-base"></i> Message</button>
+                            <button class="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 rounded-lg text-xs md:text-sm font-bold shadow-sm transition-colors flex items-center justify-center gap-1.5"><i class="fa-solid fa-phone"></i> Call Driver</button>
+                        </div>
+                    </div>
+
+                    <!-- Exception Alerts -->
+                    <div id="track-alert-box" class="hidden mx-4 md:mx-6 mt-4 md:mt-6 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs font-bold flex items-start gap-2 shadow-sm shrink-0">
+                        <i class="fa-solid fa-triangle-exclamation mt-0.5 text-sm"></i>
+                        <span id="track-alert-msg">Warning: Vehicle stationary for over 45 minutes.</span>
+                    </div>
+
+                    <!-- Material & Transporter Summary -->
+                    <div class="p-4 md:p-6 border-b border-gray-100 shrink-0">
+                        <p class="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-2">Load & Logistics Details</p>
+                        <div class="grid grid-cols-2 gap-3 md:gap-4 text-xs md:text-sm bg-gray-50 p-3 rounded-lg border border-gray-100">
+                            <div><p class="text-[10px] text-gray-500 uppercase">Transporter</p><p class="font-bold text-gray-800 truncate" id="track-transporter">-</p></div>
+                            <div><p class="text-[10px] text-gray-500 uppercase">Material</p><p class="font-bold text-gray-800 truncate" id="track-material">-</p></div>
+                            <div><p class="text-[10px] text-gray-500 uppercase">Net Weight</p><p class="font-bold text-erp-main" id="track-weight">-</p></div>
+                            <div><p class="text-[10px] text-gray-500 uppercase">E-Way Bill</p><p class="font-bold text-blue-600 cursor-pointer hover:underline truncate">Generated <i class="fa-solid fa-up-right-from-square text-[10px] ml-1"></i></p></div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Pro Timeline -->
+                    <div class="p-4 md:p-6 flex-1 bg-gray-50/50 min-h-[250px]">
+                        <h4 class="font-bold text-gray-800 text-xs md:text-sm mb-4 md:mb-6 uppercase tracking-wider flex items-center gap-2"><i class="fa-solid fa-timeline text-erp-main"></i> Journey Timeline</h4>
+                        <div class="relative border-l-2 border-gray-200 ml-3 space-y-5 md:space-y-6" id="track-timeline">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                    
+                    <!-- Gate Photo / POD -->
+                    <div class="p-4 md:p-6 border-t border-gray-100 bg-white shrink-0" id="track-gate-photo-section">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rate Modal -->
+    <div id="rate-modal" class="fixed inset-0 bg-black bg-opacity-50 z-[90] hidden flex items-center justify-center backdrop-blur-sm p-4 no-print">
+        <div class="bg-white rounded-lg p-6 w-full max-w-sm shadow-xl transform transition-all scale-95 opacity-0 flex flex-col" id="rate-modal-content">
+            <h3 class="text-lg font-bold mb-4 text-gray-800 border-b pb-2" id="rate-modal-title"><i class="fa-solid fa-file-invoice-dollar mr-2 text-erp-main"></i> Generate Document</h3>
+            <label class="block text-xs font-bold text-gray-600 mb-2 uppercase tracking-wider">Enter Rate (₹ per Ton)</label>
+            <input type="number" id="document-rate-input" class="w-full border border-gray-300 p-2 rounded mb-6 outline-none focus:border-erp-main">
+            <input type="hidden" id="document-trip-id">
+            <input type="hidden" id="document-mode">
+            <div class="flex justify-end gap-3 mt-auto">
+                <button onclick="closeRateModal()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded text-sm font-medium">Cancel</button>
+                <button onclick="processDocumentGeneration()" class="px-4 py-2 bg-erp-main text-white rounded text-sm font-medium shadow" id="rate-modal-submit">Generate</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Modal -->
+    <div id="print-modal" class="fixed inset-0 bg-black bg-opacity-75 z-[95] hidden flex items-center justify-center backdrop-blur-sm p-2 md:p-4">
+        <div class="bg-white rounded-lg shadow-2xl w-full max-w-4xl h-[95vh] flex flex-col transform transition-all scale-95 opacity-0" id="print-modal-content">
+            <div class="px-4 py-3 md:px-6 md:py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-lg no-print shrink-0">
+                <h3 class="text-base md:text-lg font-bold text-gray-800"><i class="fa-solid fa-print mr-2"></i> Document Preview</h3>
+                <div class="flex gap-2 md:gap-4 items-center">
+                    <button onclick="shareDocumentOnWhatsApp()" class="text-green-500 hover:text-green-600 p-1" title="Share on WhatsApp"><i class="fa-brands fa-whatsapp text-lg md:text-xl"></i></button>
+                    <select id="print-signature-select" class="text-xs md:text-sm border border-gray-300 rounded px-1.5 md:px-2 py-1 outline-none w-24 md:w-auto truncate" onchange="updatePrintSignature()"><option value="">Select Signatory...</option></select>
+                    <button onclick="closePrintPreview()" class="text-gray-400 hover:text-red-500 p-1"><i class="fa-solid fa-times text-lg md:text-xl"></i></button>
+                </div>
+            </div>
+            <!-- Wrap print preview content carefully so it scales on mobile but prints normally -->
+            <div class="flex-1 overflow-y-auto p-2 md:p-8 bg-gray-200 flex justify-center">
+                <div class="bg-white p-4 md:p-6 shadow-sm w-full max-w-[800px] print-exact overflow-x-auto hide-scrollbar text-xs md:text-sm" id="print-preview-modal">
+                    <div id="print-document-content" class="w-full min-w-0 max-w-full overflow-x-auto"></div>
+                </div>
+            </div>
+            <div class="px-4 py-3 md:px-6 md:py-4 border-t border-gray-100 flex justify-end gap-3 bg-gray-50 rounded-b-lg no-print shrink-0">
+                <button onclick="closePrintPreview()" class="px-4 py-2 border border-gray-300 text-gray-700 rounded shadow-sm hover:bg-gray-100 text-sm font-medium">Cancel</button>
+                <button onclick="printDocument()" class="px-4 py-2 bg-erp-main text-white rounded shadow-sm hover:bg-erp-hover text-sm font-medium flex items-center gap-2"><i class="fa-solid fa-print"></i> Print</button>
+            </div>
+        </div>
+    </div>
+    <!-- Supabase Client Foundation -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabase-client.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

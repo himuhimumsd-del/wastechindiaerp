@@ -1,0 +1,13 @@
+# Dependencies & System files
+node_modules/
+.DS_Store
+Thumbs.db
+*.log
+
+# Sensitive credentials & environment
+.env
+.env.local
+.env.*.local
+
+# Scratch and internal tests
+scratch/lr_reference_page.png
