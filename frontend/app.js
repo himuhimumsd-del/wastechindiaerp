@@ -8021,6 +8021,17 @@ document.getElementById('print-modal').classList.remove('hidden');
             let filteredData = allData;
             if (!globalModules.includes(moduleKey)) filteredData = allData.filter(item => !item.companyId || item.companyId === state.currentCompany);
 
+            // Universal deduplication: Guarantee that no table displays duplicate records
+            const seenRowKeys = new Set();
+            filteredData = filteredData.filter(item => {
+                if (!item) return false;
+                const key = item.id || item.dbId || item.uuid || item.db_id || item.trip_number || item.tripNumber || item.entry_number || item.po_number || item.invoice_number || (item.username ? `user_${item.username}` : null);
+                if (!key) return true;
+                if (seenRowKeys.has(key)) return false;
+                seenRowKeys.add(key);
+                return true;
+            });
+
             const isPeriodScoped = !!periodDateFields[moduleKey];
             const totalBeforePeriodFilter = filteredData.length;
             if (isPeriodScoped) filteredData = filterByActivePeriod(filteredData, periodDateFields[moduleKey]);
@@ -11438,12 +11449,18 @@ document.getElementById('print-modal').classList.remove('hidden');
 
                     // Synchronize live masters & UI data
                     if (state.liveMasters && Array.isArray(state.liveMasters.gateVerification)) {
-                        state.liveMasters.gateVerification.unshift(normalizedRow);
+                        const gIdx = state.liveMasters.gateVerification.findIndex(r => r.id === normalizedRow.id || (normalizedRow.dbId && r.dbId === normalizedRow.dbId));
+                        if (gIdx > -1) state.liveMasters.gateVerification[gIdx] = normalizedRow;
+                        else state.liveMasters.gateVerification.unshift(normalizedRow);
                     }
                     if (!Array.isArray(state.data.gateVerification)) {
                         state.data.gateVerification = [];
                     }
-                    state.data.gateVerification.unshift(normalizedRow);
+                    if (!state.liveMasters || state.liveMasters.gateVerification !== state.data.gateVerification) {
+                        const dIdx = state.data.gateVerification.findIndex(r => r.id === normalizedRow.id || (normalizedRow.dbId && r.dbId === normalizedRow.dbId));
+                        if (dIdx > -1) state.data.gateVerification[dIdx] = normalizedRow;
+                        else state.data.gateVerification.unshift(normalizedRow);
+                    }
 
                     if (typeof logAudit === 'function') {
                         logAudit('gateVerification', 'Create', normalizedRow);
@@ -11694,12 +11711,18 @@ document.getElementById('print-modal').classList.remove('hidden');
 
                     // Synchronize live masters & UI data
                     if (state.liveMasters && Array.isArray(state.liveMasters.machineLogs)) {
-                        state.liveMasters.machineLogs.unshift(normalizedRow);
+                        const mIdx = state.liveMasters.machineLogs.findIndex(r => r.id === normalizedRow.id || (normalizedRow.dbId && r.dbId === normalizedRow.dbId));
+                        if (mIdx > -1) state.liveMasters.machineLogs[mIdx] = normalizedRow;
+                        else state.liveMasters.machineLogs.unshift(normalizedRow);
                     }
                     if (!Array.isArray(state.data.machineLogs)) {
                         state.data.machineLogs = [];
                     }
-                    state.data.machineLogs.unshift(normalizedRow);
+                    if (!state.liveMasters || state.liveMasters.machineLogs !== state.data.machineLogs) {
+                        const dIdx = state.data.machineLogs.findIndex(r => r.id === normalizedRow.id || (normalizedRow.dbId && r.dbId === normalizedRow.dbId));
+                        if (dIdx > -1) state.data.machineLogs[dIdx] = normalizedRow;
+                        else state.data.machineLogs.unshift(normalizedRow);
+                    }
 
                     if (typeof logAudit === 'function') {
                         logAudit('machineLogs', 'Create', normalizedRow);
@@ -11954,12 +11977,18 @@ document.getElementById('print-modal').classList.remove('hidden');
 
                 // Synchronize live masters & UI data
                 if (state.liveMasters && Array.isArray(state.liveMasters.consumableLogs)) {
-                    state.liveMasters.consumableLogs.unshift(normalizedRow);
+                    const cIdx = state.liveMasters.consumableLogs.findIndex(r => r.id === normalizedRow.id);
+                    if (cIdx > -1) state.liveMasters.consumableLogs[cIdx] = normalizedRow;
+                    else state.liveMasters.consumableLogs.unshift(normalizedRow);
                 }
                 if (!Array.isArray(state.data.consumableLogs)) {
                     state.data.consumableLogs = [];
                 }
-                state.data.consumableLogs.unshift(normalizedRow);
+                if (!state.liveMasters || state.liveMasters.consumableLogs !== state.data.consumableLogs) {
+                    const dIdx = state.data.consumableLogs.findIndex(r => r.id === normalizedRow.id);
+                    if (dIdx > -1) state.data.consumableLogs[dIdx] = normalizedRow;
+                    else state.data.consumableLogs.unshift(normalizedRow);
+                }
 
                 if (typeof logAudit === 'function') {
                     logAudit('consumableLogs', 'Create', normalizedRow);
@@ -12181,12 +12210,18 @@ document.getElementById('print-modal').classList.remove('hidden');
 
                     // Synchronize live masters & UI data
                     if (state.liveMasters && Array.isArray(state.liveMasters.trips)) {
-                        state.liveMasters.trips.unshift(normalizedRow);
+                        const tIdx = state.liveMasters.trips.findIndex(r => r.id === normalizedRow.id || (normalizedRow.dbId && r.dbId === normalizedRow.dbId));
+                        if (tIdx > -1) state.liveMasters.trips[tIdx] = normalizedRow;
+                        else state.liveMasters.trips.unshift(normalizedRow);
                     }
                     if (!Array.isArray(state.data.trips)) {
                         state.data.trips = [];
                     }
-                    state.data.trips.unshift(normalizedRow);
+                    if (!state.liveMasters || state.liveMasters.trips !== state.data.trips) {
+                        const dIdx = state.data.trips.findIndex(r => r.id === normalizedRow.id || (normalizedRow.dbId && r.dbId === normalizedRow.dbId));
+                        if (dIdx > -1) state.data.trips[dIdx] = normalizedRow;
+                        else state.data.trips.unshift(normalizedRow);
+                    }
 
                     if (typeof logAudit === 'function') {
                         logAudit('trips', 'Create', normalizedRow);
@@ -12544,12 +12579,18 @@ document.getElementById('print-modal').classList.remove('hidden');
 
                     // Synchronize state
                     if (state.liveMasters && Array.isArray(state.liveMasters[moduleKey])) {
-                        state.liveMasters[moduleKey].unshift(normalizedRow);
+                        const oIdx = state.liveMasters[moduleKey].findIndex(r => r.id === normalizedRow.id || (normalizedRow.poNumber && r.poNumber === normalizedRow.poNumber));
+                        if (oIdx > -1) state.liveMasters[moduleKey][oIdx] = normalizedRow;
+                        else state.liveMasters[moduleKey].unshift(normalizedRow);
                     }
                     if (!Array.isArray(state.data[moduleKey])) {
                         state.data[moduleKey] = [];
                     }
-                    state.data[moduleKey].unshift(normalizedRow);
+                    if (!state.liveMasters || state.liveMasters[moduleKey] !== state.data[moduleKey]) {
+                        const dIdx = state.data[moduleKey].findIndex(r => r.id === normalizedRow.id || (normalizedRow.poNumber && r.poNumber === normalizedRow.poNumber));
+                        if (dIdx > -1) state.data[moduleKey][dIdx] = normalizedRow;
+                        else state.data[moduleKey].unshift(normalizedRow);
+                    }
 
                     if (typeof logAudit === 'function') {
                         logAudit(moduleKey, 'Create', normalizedRow);
@@ -12867,12 +12908,18 @@ document.getElementById('print-modal').classList.remove('hidden');
 
                 // Synchronize state
                 if (state.liveMasters && Array.isArray(state.liveMasters.grn)) {
-                    state.liveMasters.grn.unshift(normalizedRow);
+                    const gIdx = state.liveMasters.grn.findIndex(r => r.id === normalizedRow.id || (normalizedRow.grnNumber && r.grnNumber === normalizedRow.grnNumber));
+                    if (gIdx > -1) state.liveMasters.grn[gIdx] = normalizedRow;
+                    else state.liveMasters.grn.unshift(normalizedRow);
                 }
                 if (!Array.isArray(state.data.grn)) {
                     state.data.grn = [];
                 }
-                state.data.grn.unshift(normalizedRow);
+                if (!state.liveMasters || state.liveMasters.grn !== state.data.grn) {
+                    const dIdx = state.data.grn.findIndex(r => r.id === normalizedRow.id || (normalizedRow.grnNumber && r.grnNumber === normalizedRow.grnNumber));
+                    if (dIdx > -1) state.data.grn[dIdx] = normalizedRow;
+                    else state.data.grn.unshift(normalizedRow);
+                }
 
                 // Link trips in state
                 selectedTrips.forEach(t => {
@@ -13208,12 +13255,18 @@ document.getElementById('print-modal').classList.remove('hidden');
 
                     // Synchronize state
                     if (state.liveMasters && Array.isArray(state.liveMasters.invoices)) {
-                        state.liveMasters.invoices.unshift(normalizedRow);
+                        const iIdx = state.liveMasters.invoices.findIndex(r => r.id === normalizedRow.id || (normalizedRow.invoice_number && r.invoice_number === normalizedRow.invoice_number));
+                        if (iIdx > -1) state.liveMasters.invoices[iIdx] = normalizedRow;
+                        else state.liveMasters.invoices.unshift(normalizedRow);
                     }
                     if (!Array.isArray(state.data.invoices)) {
                         state.data.invoices = [];
                     }
-                    state.data.invoices.unshift(normalizedRow);
+                    if (!state.liveMasters || state.liveMasters.invoices !== state.data.invoices) {
+                        const dIdx = state.data.invoices.findIndex(r => r.id === normalizedRow.id || (normalizedRow.invoice_number && r.invoice_number === normalizedRow.invoice_number));
+                        if (dIdx > -1) state.data.invoices[dIdx] = normalizedRow;
+                        else state.data.invoices.unshift(normalizedRow);
+                    }
 
                     // Update GRN linking in local state
                     if (normalizedRow.grnRef) {
@@ -13466,12 +13519,18 @@ document.getElementById('print-modal').classList.remove('hidden');
 
                     // Synchronize state
                     if (state.liveMasters && Array.isArray(state.liveMasters.receivedInvoice)) {
-                        state.liveMasters.receivedInvoice.unshift(normalizedRow);
+                        const vIdx = state.liveMasters.receivedInvoice.findIndex(r => r.id === normalizedRow.id || (normalizedRow.vendorInvoiceNumber && r.vendorInvoiceNumber === normalizedRow.vendorInvoiceNumber));
+                        if (vIdx > -1) state.liveMasters.receivedInvoice[vIdx] = normalizedRow;
+                        else state.liveMasters.receivedInvoice.unshift(normalizedRow);
                     }
                     if (!Array.isArray(state.data.receivedInvoice)) {
                         state.data.receivedInvoice = [];
                     }
-                    state.data.receivedInvoice.unshift(normalizedRow);
+                    if (!state.liveMasters || state.liveMasters.receivedInvoice !== state.data.receivedInvoice) {
+                        const dIdx = state.data.receivedInvoice.findIndex(r => r.id === normalizedRow.id || (normalizedRow.vendorInvoiceNumber && r.vendorInvoiceNumber === normalizedRow.vendorInvoiceNumber));
+                        if (dIdx > -1) state.data.receivedInvoice[dIdx] = normalizedRow;
+                        else state.data.receivedInvoice.unshift(normalizedRow);
+                    }
 
                     if (typeof logAudit === 'function') {
                         logAudit('receivedInvoice', 'Create', normalizedRow);
@@ -16479,10 +16538,34 @@ document.getElementById('print-modal').classList.remove('hidden');
                 };
 
                 if (!state.data.usersMaster) state.data.usersMaster = [];
-                state.data.usersMaster.push(newUser);
+                const dIdx = state.data.usersMaster.findIndex(u => (newUser.id && u.id === newUser.id) || (newUser.username && u.username && u.username.toLowerCase() === newUser.username.toLowerCase()));
+                if (dIdx > -1) {
+                    state.data.usersMaster[dIdx] = newUser;
+                } else {
+                    state.data.usersMaster.unshift(newUser);
+                }
 
-                if (!state.liveMasters.profiles) state.liveMasters.profiles = [];
-                state.liveMasters.profiles.push(newUser);
+                if (state.liveMasters && Array.isArray(state.liveMasters.profiles) && state.liveMasters.profiles !== state.data.usersMaster) {
+                    const pIdx = state.liveMasters.profiles.findIndex(u => (newUser.id && u.id === newUser.id) || (newUser.username && u.username && u.username.toLowerCase() === newUser.username.toLowerCase()));
+                    if (pIdx > -1) {
+                        state.liveMasters.profiles[pIdx] = newUser;
+                    } else {
+                        state.liveMasters.profiles.unshift(newUser);
+                    }
+                }
+
+                // Clean up any memory duplicate entries
+                const uMap = new Map();
+                (state.data.usersMaster || []).forEach(u => {
+                    if (u) {
+                        const k = u.id || u.username;
+                        if (k && !uMap.has(k)) uMap.set(k, u);
+                    }
+                });
+                state.data.usersMaster = Array.from(uMap.values());
+                if (state.liveMasters && Array.isArray(state.liveMasters.profiles)) {
+                    state.liveMasters.profiles = state.data.usersMaster;
+                }
 
                 if (typeof populateUserSelector === 'function') populateUserSelector();
                 logAudit('usersMaster', 'Create', newUser);
