@@ -5154,6 +5154,83 @@ const indianStates = [
             return (state.data && Array.isArray(state.data.receivedInvoice)) ? state.data.receivedInvoice : [];
         }
 
+        function getLiveAuditLogs() {
+            const allLogs = [];
+            const seenIds = new Set();
+            if (state.liveMasters && Array.isArray(state.liveMasters.auditLogs)) {
+                state.liveMasters.auditLogs.forEach(l => {
+                    if (l && l.id && !seenIds.has(l.id)) { seenIds.add(l.id); allLogs.push(l); }
+                });
+            }
+            if (state.data && Array.isArray(state.data.auditLogs)) {
+                state.data.auditLogs.forEach(l => {
+                    if (l && l.id && !seenIds.has(l.id)) { seenIds.add(l.id); allLogs.push(l); }
+                });
+            }
+            return allLogs;
+        }
+
+        function getLiveRecordAny(moduleKey, recordId) {
+            if (!moduleKey || !recordId) return null;
+            if (moduleKey === 'trips' && typeof getLiveTrips === 'function') {
+                const found = getLiveTrips().find(r => r.id === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'partiesMaster' && typeof getLiveParties === 'function') {
+                const found = getLiveParties().find(r => r.id === recordId || r.name === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'vehicleMaster' && typeof getLiveVehicles === 'function') {
+                const found = getLiveVehicles().find(r => r.id === recordId || r.vehicleNo === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'machineryMaster' && typeof getLivePlantMachinery === 'function') {
+                const found = getLivePlantMachinery().find(r => r.id === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'consumablesMaster' && typeof getLiveConsumables === 'function') {
+                const found = getLiveConsumables().find(r => r.id === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'employees' && typeof getLiveEmployees === 'function') {
+                const found = getLiveEmployees().find(r => r.id === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'attendance' && typeof getLiveAttendance === 'function') {
+                const found = getLiveAttendance().find(r => r.id === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'payrollLedger' && typeof getLivePayrollLedger === 'function') {
+                const found = getLivePayrollLedger().find(r => r.id === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'invoices' && typeof getLiveInvoices === 'function') {
+                const found = getLiveInvoices().find(r => r.id === recordId || r.db_id === recordId || r.invoice_number === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'receivedInvoice' && typeof getLiveReceivedInvoices === 'function') {
+                const found = getLiveReceivedInvoices().find(r => r.id === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'poReceived' && typeof getLivePoReceived === 'function') {
+                const found = getLivePoReceived().find(r => r.id === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'poIssued' && typeof getLivePoIssued === 'function') {
+                const found = getLivePoIssued().find(r => r.id === recordId);
+                if (found) return found;
+            }
+            if (moduleKey === 'grn' && typeof getLiveGrn === 'function') {
+                const found = getLiveGrn().find(r => r.id === recordId);
+                if (found) return found;
+            }
+            if (state.data && state.data[moduleKey] && Array.isArray(state.data[moduleKey])) {
+                const found = state.data[moduleKey].find(r => r.id === recordId);
+                if (found) return found;
+            }
+            return null;
+        }
+
         function getLiveTrips() {
             // Wave 11.0 Security Hardening: Once live trip records have been successfully loaded,
             // the live result is authoritative even if it contains zero authorized rows.
@@ -6156,10 +6233,10 @@ const indianStates = [
             const tripCount = getLiveTrips().filter(t => t.status === 'In Progress' && plantDataFilter(t)).length;
 
             // Company-wide KPI cards are only shown to users who can actually view those modules.
-            if (hasPerm('employees', 'view')) kpiHtml += createKpiCard('Total Employees', empCount, 'fa-users', 'text-blue-500', 'bg-blue-100');
-            if (hasPerm('attendance', 'view')) kpiHtml += createKpiCard('Present Today', attCount, 'fa-user-check', 'text-green-600', 'bg-green-100');
-            if (hasPerm('poReceived', 'view') || hasPerm('poIssued', 'view')) kpiHtml += createKpiCard('Active POs', poCount, 'fa-file-invoice', 'text-purple-500', 'bg-purple-100');
-            if (hasPerm('trips', 'view')) kpiHtml += createKpiCard('Active Trips', tripCount, 'fa-truck-front', 'text-orange-500', 'bg-orange-100');
+            if (hasPerm('employees', 'view')) kpiHtml += createKpiCard('Total Employees', empCount, 'fa-users', 'text-blue-500', 'bg-blue-100', 'employees');
+            if (hasPerm('attendance', 'view')) kpiHtml += createKpiCard('Present Today', attCount, 'fa-user-check', 'text-green-600', 'bg-green-100', 'attendance');
+            if (hasPerm('poReceived', 'view') || hasPerm('poIssued', 'view')) kpiHtml += createKpiCard('Active POs', poCount, 'fa-file-invoice', 'text-purple-500', 'bg-purple-100', hasPerm('poReceived', 'view') ? 'poReceived' : 'poIssued');
+            if (hasPerm('trips', 'view')) kpiHtml += createKpiCard('Active Trips', tripCount, 'fa-truck-front', 'text-orange-500', 'bg-orange-100', 'trips');
 
             const todayStr = new Date().toISOString().split('T')[0];
             const punchWidgetHtml = linkedEmp ? buildPunchWidget(linkedEmp, todayStr) : '';
@@ -6288,11 +6365,15 @@ const indianStates = [
             area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
-        function createKpiCard(title, value, icon, iconColor, bgColor) {
+        function createKpiCard(title, value, icon, iconColor, bgColor, navModule = '') {
+            const clickAttr = navModule ? `onclick="switchModule('${navModule}')" style="cursor:pointer;" class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center justify-between hover:shadow-md hover:border-erp-main transition-all group"` : `class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center justify-between"`;
             return `
-                <div class="bg-white rounded-xl shadow-sm border border-gray-100 p-6 flex items-center justify-between">
-                    <div><p class="text-sm font-medium text-gray-500 mb-1">${title}</p><h4 class="text-2xl font-bold text-gray-800">${value}</h4></div>
-                    <div class="h-12 w-12 rounded-full ${bgColor} flex items-center justify-center"><i class="fa-solid ${icon} text-xl ${iconColor}"></i></div>
+                <div ${clickAttr}>
+                    <div>
+                        <p class="text-sm font-medium text-gray-500 mb-1 flex items-center gap-1.5">${title} ${navModule ? '<i class="fa-solid fa-arrow-up-right-from-square text-[10px] text-gray-400 group-hover:text-erp-main"></i>' : ''}</p>
+                        <h4 class="text-2xl font-bold text-gray-800 group-hover:text-erp-main transition-colors">${value}</h4>
+                    </div>
+                    <div class="h-12 w-12 rounded-full ${bgColor} flex items-center justify-center group-hover:scale-110 transition-transform"><i class="fa-solid ${icon} text-xl ${iconColor}"></i></div>
                 </div>`;
         }
 
@@ -7998,9 +8079,38 @@ document.getElementById('print-modal').classList.remove('hidden');
                     if(col.hideInTable) return; 
                     let val = (row[col.key] !== undefined && row[col.key] !== null && row[col.key] !== '') ? row[col.key] : '-';
                     if(col.type === 'checkboxGroup' && Array.isArray(row[col.key])) val = row[col.key].join(' & ') || '-';
-                    if(col.dataSource && col.dataSource.module === 'employees' && row[col.key]) {
-                        const emp = getLiveEmployees().find(e => e.id === row[col.key]);
-                        val = emp ? emp.name : row[col.key];
+                    if(col.dataSource && row[col.key]) {
+                        if(col.dataSource.module === 'employees') {
+                            const emp = (typeof getLiveEmployees === 'function' ? getLiveEmployees() : []).find(e => e.id === row[col.key]);
+                            val = emp ? emp.name : row[col.key];
+                        } else if(col.dataSource.module === 'consumablesMaster') {
+                            const con = (typeof getLiveConsumables === 'function' ? getLiveConsumables() : []).find(c => c.id === row[col.key] || c.name === row[col.key]);
+                            val = con ? con.name : row[col.key];
+                        } else if(col.dataSource.module === 'machineryMaster') {
+                            const mac = (typeof getLivePlantMachinery === 'function' ? getLivePlantMachinery() : []).find(m => m.id === row[col.key] || m.name === row[col.key]);
+                            val = mac ? (mac.name || mac.machineName) : row[col.key];
+                        } else if(col.dataSource.module === 'vehicleMaster') {
+                            const veh = (typeof getLiveVehicles === 'function' ? getLiveVehicles() : []).find(v => v.id === row[col.key] || v.vehicleNo === row[col.key]);
+                            val = veh ? (veh.vehicleNo || veh.registrationNo) : row[col.key];
+                        } else if(col.dataSource.module === 'partiesMaster') {
+                            const pty = (typeof getLiveParties === 'function' ? getLiveParties() : []).find(p => p.id === row[col.key] || p.name === row[col.key]);
+                            val = pty ? (pty.tradeName || pty.name) : row[col.key];
+                        } else if(col.dataSource.module === 'unitMaster') {
+                            const unt = (typeof getLiveUnits === 'function' ? getLiveUnits() : []).find(u => u.id === row[col.key] || u.unitName === row[col.key]);
+                            val = unt ? (unt.unitName || unt.name || unt.id) : row[col.key];
+                        }
+                    }
+                    if(col.key === 'consumable' && row[col.key] && (!col.dataSource || col.dataSource.module !== 'consumablesMaster')) {
+                        const con = (typeof getLiveConsumables === 'function' ? getLiveConsumables() : []).find(c => c.id === row[col.key] || c.name === row[col.key]);
+                        if(con) val = con.name;
+                    }
+                    if(col.key === 'machine' && row[col.key] && (!col.dataSource || col.dataSource.module !== 'machineryMaster')) {
+                        const mac = (typeof getLivePlantMachinery === 'function' ? getLivePlantMachinery() : []).find(m => m.id === row[col.key] || m.name === row[col.key]);
+                        if(mac) val = mac.name || mac.machineName;
+                    }
+                    if(col.key === 'vehicle' && row[col.key]) {
+                        const veh = (typeof getLiveVehicles === 'function' ? getLiveVehicles() : []).find(v => v.id === row[col.key] || v.vehicleNo === row[col.key]);
+                        if(veh) val = veh.vehicleNo || veh.registrationNo;
                     }
                     if(col.key === 'permissions' && moduleKey === 'rolesMaster') val = '<span class="text-xs text-blue-500 font-bold">Custom Matrix Set</span>';
                     if(col.key === 'password') val = '******';
@@ -8184,6 +8294,13 @@ document.getElementById('print-modal').classList.remove('hidden');
                         `</div><button type="button" class="text-erp-main text-xs font-bold mt-1" onclick="addPtSlabRow()"><i class="fa-solid fa-plus"></i> Add Slab</button>
                         </div>`;
                 } else if (field.key === 'password') {
+                    const isEditUser = Boolean(state.editingId);
+                    inputHtml = `<div class="relative">
+                        <input type="password" id="field_${field.key}" value="${value}" ${disabledAttr} ${(!isEditUser && field.required) ? 'required' : ''} placeholder="${isEditUser ? 'Leave blank to keep current password' : 'Enter password'}" class="w-full p-2.5 border border-gray-300 rounded focus:border-erp-main text-sm pr-10">
+                        <button type="button" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none" onclick="const input = document.getElementById('field_${field.key}'); const icon = this.querySelector('i'); if (input.type === 'password') { input.type = 'text'; icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); } else { input.type = 'password'; icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }">
+                            <i class="fa-solid fa-eye text-sm"></i>
+                        </button>
+                    </div>`;
                 } else if (field.type === 'textarea') {
                     inputHtml = `<textarea id="field_${field.key}" rows="3" ${disabledAttr}>${value}</textarea>`;
                 } else if (field.type === 'checkbox') {
@@ -9094,9 +9211,10 @@ document.getElementById('print-modal').classList.remove('hidden');
                 { key: 'system', title: 'System Admin', icon: 'fa-cogs', color: 'slate' }
             ];
             const modKeysInCategory = (cat) => Object.keys(modulesConfig).filter(k => modulesConfig[k].category === cat);
+            const allAudits = typeof getLiveAuditLogs === 'function' ? getLiveAuditLogs() : (state.data.auditLogs || []);
             const getLogCount = (cat) => {
                 const keys = modKeysInCategory(cat);
-                return state.data.auditLogs.filter(l => keys.includes(l.moduleKey) && l.companyId === state.currentCompany).length;
+                return allAudits.filter(l => keys.includes(l.moduleKey) && (!l.companyId || !state.currentCompany || l.companyId === state.currentCompany || l.plant_id === state.currentCompany)).length;
             };
 
             container.innerHTML = `
@@ -9128,7 +9246,8 @@ document.getElementById('print-modal').classList.remove('hidden');
         function showAuditDetail(key, title) {
             const detailArea = document.getElementById('audit-detail-view');
             const modKeysInCategory = Object.keys(modulesConfig).filter(k => modulesConfig[k].category === key);
-            const logs = state.data.auditLogs.filter(l => modKeysInCategory.includes(l.moduleKey) && l.companyId === state.currentCompany);
+            const allAudits = typeof getLiveAuditLogs === 'function' ? getLiveAuditLogs() : (state.data.auditLogs || []);
+            const logs = allAudits.filter(l => modKeysInCategory.includes(l.moduleKey) && (!l.companyId || !state.currentCompany || l.companyId === state.currentCompany || l.plant_id === state.currentCompany));
 
             // Per-module breakdown chips, so it's clear which modules within the category contributed logs
             const perModuleCounts = modKeysInCategory.map(k => ({ title: modulesConfig[k].title, count: logs.filter(l => l.moduleKey === k).length })).filter(x => x.count > 0);
@@ -9233,18 +9352,22 @@ document.getElementById('print-modal').classList.remove('hidden');
 
         // --- DEEP DIVE: RECORD SNAPSHOT FROM AUDIT ---
         function openAuditRecordSnapshot(moduleKey, recordId, auditId) {
-            const auditLog = state.data.auditLogs.find(a => a.id === auditId);
+            const allAudits = typeof getLiveAuditLogs === 'function' ? getLiveAuditLogs() : (state.data.auditLogs || []);
+            const auditLog = allAudits.find(a => a.id === auditId) || (state.data.auditLogs && state.data.auditLogs.find(a => a.id === auditId));
             if(!auditLog || !moduleKey) return;
 
             let recordData = {};
             let isDeleted = false;
 
-            const liveRecord = state.data[moduleKey] ? state.data[moduleKey].find(r => r.id === recordId) : null;
-            if (liveRecord) {
+            const liveRecord = typeof getLiveRecordAny === 'function' ? getLiveRecordAny(moduleKey, recordId) : (state.data[moduleKey] ? state.data[moduleKey].find(r => r.id === recordId) : null);
+            if (liveRecord && auditLog.action !== 'Delete') {
                 recordData = liveRecord;
             } else {
-                isDeleted = true;
-                try { recordData = JSON.parse(auditLog.rawSnapshot); } catch(e) {}
+                if (auditLog.action === 'Delete') isDeleted = true;
+                try { recordData = JSON.parse(auditLog.rawSnapshot) || {}; } catch(e) { recordData = {}; }
+                if (!recordData || Object.keys(recordData).length === 0) {
+                    if (liveRecord) recordData = liveRecord;
+                }
             }
 
             const config = modulesConfig[moduleKey];
@@ -9324,19 +9447,19 @@ document.getElementById('print-modal').classList.remove('hidden');
             const tripListHtml = linkedTrips.length ? `
                 <div class="overflow-x-auto"><table class="w-full text-left text-xs whitespace-nowrap">
                     <thead class="bg-gray-50 border-b"><tr><th class="p-2">Trip Date</th><th class="p-2">Client Name</th><th class="p-2">Vehicle No.</th><th class="p-2">LR No.</th><th class="p-2">DC No.</th><th class="p-2">PO Received No.</th><th class="p-2">PO Issued No.</th><th class="p-2">Origin</th><th class="p-2">Destination</th><th class="p-2 text-right">Qty(MT)</th><th class="p-2 text-right">Received Qty(MT)</th></tr></thead>
-                    <tbody>${linkedTrips.map(t => `<tr class="border-b"><td class="p-2">${t.date||'-'}</td><td class="p-2">${t.client||'-'}</td><td class="p-2">${t.vehicle||'-'}</td><td class="p-2">${t.lrNumber||'-'}</td><td class="p-2">${t.challanNumber||'-'}</td><td class="p-2">${t.poReceived||'-'}</td><td class="p-2">${t.poIssued||'-'}</td><td class="p-2">${t.originCity||'-'}</td><td class="p-2">${t.destinationCity||'-'}</td><td class="p-2 text-right">${t.netWeight||0}</td><td class="p-2 text-right text-green-600">${t.receivedWeight||0}</td></tr>`).join('')}</tbody>
+                    <tbody>${linkedTrips.map(t => `<tr class="border-b"><td class="p-2">${t.date||'-'}</td><td class="p-2">${t.client||'-'}</td><td class="p-2">${t.vehicle||'-'}</td><td class="p-2"><button onclick="openTripView('${t.id}')" class="text-blue-600 hover:text-blue-800 font-medium underline">${t.lrNumber||t.id}</button></td><td class="p-2">${t.challanNumber||'-'}</td><td class="p-2">${t.poReceived||'-'}</td><td class="p-2">${t.poIssued||'-'}</td><td class="p-2">${t.originCity||'-'}</td><td class="p-2">${t.destinationCity||'-'}</td><td class="p-2 text-right">${t.netWeight||0}</td><td class="p-2 text-right text-green-600">${t.receivedWeight||0}</td></tr>`).join('')}</tbody>
                 </table></div>` : '<div class="bg-blue-50 text-blue-700 text-sm p-3 rounded text-center">NO DATA FOUND !</div>';
 
             const grnListHtml = linkedGrns.length ? `
                 <div class="overflow-x-auto"><table class="w-full text-left text-xs whitespace-nowrap">
                     <thead class="bg-gray-50 border-b"><tr><th class="p-2">GRN No</th><th class="p-2">Date</th><th class="p-2">Condition</th><th class="p-2 text-right">Total Wt (MT)</th></tr></thead>
-                    <tbody>${linkedGrns.map(g => `<tr class="border-b"><td class="p-2">${g.id}</td><td class="p-2">${g.date||'-'}</td><td class="p-2">${g.condition||'-'}</td><td class="p-2 text-right">${g.totalWeight||0}</td></tr>`).join('')}</tbody>
+                    <tbody>${linkedGrns.map(g => `<tr class="border-b"><td class="p-2"><button onclick="openGrnView('${g.id}')" class="text-blue-600 hover:text-blue-800 font-medium underline">${g.id}</button></td><td class="p-2">${g.date||'-'}</td><td class="p-2">${g.condition||'-'}</td><td class="p-2 text-right">${g.totalWeight||0}</td></tr>`).join('')}</tbody>
                 </table></div>` : '<div class="bg-blue-50 text-blue-700 text-sm p-3 rounded text-center">NO DATA FOUND !</div>';
 
             const invoiceListHtml = linkedInvoices.length ? `
                 <div class="overflow-x-auto"><table class="w-full text-left text-xs whitespace-nowrap">
                     <thead class="bg-gray-50 border-b"><tr><th class="p-2">Invoice No</th><th class="p-2">Date</th><th class="p-2 text-right">Qty (MT)</th><th class="p-2 text-right">Grand Total</th><th class="p-2">Status</th></tr></thead>
-                    <tbody>${linkedInvoices.map(i => `<tr class="border-b"><td class="p-2">${i.id}</td><td class="p-2">${i.date||'-'}</td><td class="p-2 text-right">${i.totalQty||0}</td><td class="p-2 text-right">₹${i.totalAmount||0}</td><td class="p-2">${i.status||'-'}</td></tr>`).join('')}</tbody>
+                    <tbody>${linkedInvoices.map(i => `<tr class="border-b"><td class="p-2"><button onclick="openInvoiceView('${i.id}')" class="text-blue-600 hover:text-blue-800 font-medium underline">${i.id}</button></td><td class="p-2">${i.date||'-'}</td><td class="p-2 text-right">${i.totalQty||0}</td><td class="p-2 text-right">₹${i.totalAmount||0}</td><td class="p-2">${i.status||'-'}</td></tr>`).join('')}</tbody>
                 </table></div>` : '<div class="bg-blue-50 text-blue-700 text-sm p-3 rounded text-center">NO DATA FOUND !</div>';
 
             const materialPoListHtml = linkedPO ? `
@@ -9425,7 +9548,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                 const trip = getLiveTrips().find(t => t.id === r.tripId) || (state.data && state.data.trips ? state.data.trips.find(t => t.id === r.tripId) : null);
                 return `<tr class="border-b">
                     <td class="p-2">${i + 1}</td>
-                    <td class="p-2 text-blue-600 font-medium">${r.tripId}</td>
+                    <td class="p-2"><button onclick="openTripView('${r.tripId}')" class="text-blue-600 hover:text-blue-800 font-medium underline">${r.tripId}</button></td>
                     <td class="p-2">${trip?.vehicle || '-'}</td>
                     <td class="p-2">${trip?.date || '-'}</td>
                     <td class="p-2 text-right">${(r.tripWeight || 0).toFixed(2)}</td>
@@ -9461,7 +9584,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                 <div class="bg-white border rounded-lg p-4 mb-4">
                     <div class="flex flex-wrap justify-between gap-4 mb-4 text-xs">
                         <div><p class="text-gray-500 uppercase text-[10px]">Client</p><p class="font-bold">${grn.client || '-'}</p></div>
-                        <div><p class="text-gray-500 uppercase text-[10px]">PO Received No.</p><p class="font-bold text-blue-600">${grn.poRef || '-'}</p></div>
+                        <div><p class="text-gray-500 uppercase text-[10px]">PO Received No.</p><p class="font-bold text-blue-600">${grn.poRef ? `<button onclick="openPoView('${grn.poRef}', 'poReceived')" class="text-blue-600 hover:text-blue-800 underline font-bold">${grn.poRef}</button>` : '-'}</p></div>
                         <div><p class="text-gray-500 uppercase text-[10px]">Condition</p><p class="font-bold">${grn.condition || '-'}</p></div>
                     </div>
                     ${buildGrnBreakdownHtml(grn)}
@@ -9491,7 +9614,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                         <h4 class="font-bold text-sm border-b pb-2 mb-3">PO Received Details</h4>
                         <div class="grid grid-cols-2 gap-y-3 text-xs">
                             <div><p class="text-gray-500 uppercase text-[10px]">Client Name</p><p class="font-bold">${inv.client || '-'}</p></div>
-                            <div><p class="text-gray-500 uppercase text-[10px]">PO Number</p><p class="font-bold text-blue-600">${inv.poRef || '-'}</p></div>
+                            <div><p class="text-gray-500 uppercase text-[10px]">PO Number</p><p class="font-bold text-blue-600">${inv.poRef ? `<button onclick="openPoView('${inv.poRef}', 'poReceived')" class="text-blue-600 hover:text-blue-800 underline font-bold">${inv.poRef}</button>` : '-'}</p></div>
                             <div><p class="text-gray-500 uppercase text-[10px]">PO Date</p><p class="font-bold">${po?.date || '-'}</p></div>
                             <div><p class="text-gray-500 uppercase text-[10px]">Vendor Code</p><p class="font-bold">${po?.vendorCode || party?.vendorCode || '-'}</p></div>
                         </div>
@@ -9603,7 +9726,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                             <div><p class="text-gray-500 uppercase text-[10px]">GSTN</p><p class="font-bold">${party?.gstin||'-'}</p></div>
                             <div><p class="text-gray-500 uppercase text-[10px]">CIN</p><p class="font-bold">${party?.cin||'0'}</p></div>
                             <div><p class="text-gray-500 uppercase text-[10px]">PAN</p><p class="font-bold">${party?.pan||'-'}</p></div>
-                            <div><p class="text-gray-500 uppercase text-[10px]">PO Received Number</p><p class="font-bold text-blue-600">${trip.poReceived||'-'}</p></div>
+                            <div><p class="text-gray-500 uppercase text-[10px]">PO Received Number</p><p class="font-bold text-blue-600">${trip.poReceived ? `<button onclick="openPoView('${trip.poReceived}', 'poReceived')" class="text-blue-600 hover:text-blue-800 underline text-left font-bold">${trip.poReceived}</button>` : '-'}</p></div>
                             <div class="col-span-2"><p class="text-gray-500 uppercase text-[10px]">Material PO Number</p><p class="font-bold text-blue-600">${materialPO?.linkedPO||'-'}</p></div>
                         </div>
                     </div>
@@ -9623,7 +9746,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                     <div class="bg-white border rounded-lg p-4"><h4 class="font-bold text-sm border-b pb-2 mb-3">Attachments</h4>${attachments.length ? attachments.map(a => `<div class="flex justify-between items-center text-xs mb-1"><span>${a.type}</span><a href="${a.file}" target="_blank" class="text-blue-600 font-medium hover:underline">View</a></div>`).join('') : '<p class="text-xs text-gray-500">None</p>'}</div>
                 </div>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div class="bg-white border rounded-lg p-4"><h4 class="font-bold text-sm border-b pb-2 mb-3">GRN</h4>${linkedGrn ? `<p class="text-sm font-bold">${linkedGrn.id} — ${linkedGrn.totalWeight||0} MT</p>` : '<div class="bg-blue-50 text-blue-700 text-sm p-3 rounded text-center">NO DATA FOUND !</div>'}</div>
+                    <div class="bg-white border rounded-lg p-4"><h4 class="font-bold text-sm border-b pb-2 mb-3">GRN</h4>${linkedGrn ? `<button onclick="openGrnView('${linkedGrn.id}')" class="text-sm font-bold text-blue-600 hover:text-blue-800 underline text-left block">${linkedGrn.id} — ${linkedGrn.totalWeight||0} MT</button>` : '<div class="bg-blue-50 text-blue-700 text-sm p-3 rounded text-center">NO DATA FOUND !</div>'}</div>
                     <div class="bg-white border rounded-lg p-4"><h4 class="font-bold text-sm border-b pb-2 mb-3">Invoice</h4>${linkedInvoice ? `<p class="text-sm font-bold">${linkedInvoice.id} — ₹${linkedInvoice.totalAmount||0} (${linkedInvoice.status||'-'})</p>` : '<div class="bg-blue-50 text-blue-700 text-sm p-3 rounded text-center">NO DATA FOUND !</div>'}</div>
                 </div>
             `;
@@ -10178,7 +10301,8 @@ document.getElementById('print-modal').classList.remove('hidden');
                 const poDateFormatted = (materialPO?.date || record.poDate) ? ((materialPO?.date || record.poDate).includes('-') && (materialPO?.date || record.poDate).split('-')[0].length === 4 ? (materialPO?.date || record.poDate).split('-').reverse().join('-') : (materialPO?.date || record.poDate)) : '-';
                 const vendorCodeVal = materialPO?.vendorCode || party?.vendorCode || record.vendorCode || '-';
                 const poNumberVal = record.poReceived || record.poIssued || materialPO?.order_number || materialPO?.id || '-';
-                const vehicleVal = record.vehicle || '-';
+                const vehLookup = (typeof getLiveVehicles === 'function' ? getLiveVehicles() : []).find(v => v.id === record.vehicle || v.vehicleNo === record.vehicle || v.id === record.vehicle_id);
+                const vehicleVal = vehLookup ? (vehLookup.vehicleNo || vehLookup.registrationNo) : (record.vehicleNo || record.vehicle || '-');
                 const lrNoVal = record.lrNumber || record.id || '-';
                 const clientNameVal = record.client || party?.name || consignee.name || '-';
                 const originVal = [record.originState, record.originCity].filter(Boolean).join(', ') || [company.state, 'Raipur'].filter(Boolean).join(', ');
@@ -10392,7 +10516,8 @@ document.getElementById('print-modal').classList.remove('hidden');
                 const poDateFormatted = (materialPO?.date || record.poDate) ? ((materialPO?.date || record.poDate).includes('-') && (materialPO?.date || record.poDate).split('-')[0].length === 4 ? (materialPO?.date || record.poDate).split('-').reverse().join('-') : (materialPO?.date || record.poDate)) : '-';
                 const vendorCodeVal = materialPO?.vendorCode || party?.vendorCode || record.vendorCode || '-';
                 const poNumberVal = record.poReceived || record.poIssued || materialPO?.order_number || materialPO?.id || '-';
-                const vehicleVal = record.vehicle || '-';
+                const vehLookup = (typeof getLiveVehicles === 'function' ? getLiveVehicles() : []).find(v => v.id === record.vehicle || v.vehicleNo === record.vehicle || v.id === record.vehicle_id);
+                const vehicleVal = vehLookup ? (vehLookup.vehicleNo || vehLookup.registrationNo) : (record.vehicleNo || record.vehicle || '-');
                 const challanNoVal = record.challanNumber || record.id || '-';
                 const lrNoVal = record.lrNumber || '-';
                 const clientNameVal = record.client || party?.name || consignee.name || '-';
@@ -14043,21 +14168,50 @@ document.getElementById('print-modal').classList.remove('hidden');
             const container = document.getElementById('grn-trips-container');
             const tbody = document.getElementById('grn-trips-body');
             if (!container || !tbody) return;
-            const fromDate = document.getElementById('field_fromDate')?.value;
-            const toDate = document.getElementById('field_toDate')?.value;
-            if (!poId || !fromDate || !toDate) { container.style.display = 'none'; return; }
+            const fromDateEl = document.getElementById('field_fromDate');
+            const toDateEl = document.getElementById('field_toDate');
+            const fromDate = fromDateEl ? fromDateEl.value : '';
+            const toDate = toDateEl ? toDateEl.value : '';
+            if (!poId) { container.style.display = 'none'; return; }
 
             const savedData = {};
             (existingTripData || (state.editingId ? (state.data.grn.find(g => g.id === state.editingId)?.tripSelection || []) : [])).forEach(t => { savedData[t.tripId] = t; });
 
-            const trips = state.data.trips.filter(t =>
-                t.poReceived === poId && t.status === 'Completed' && t.companyId === state.currentCompany &&
-                t.date >= fromDate && t.date <= toDate &&
-                (!t.grnId || t.grnId === state.editingId)
-            );
+            // Merge live trips and state trips without duplicates
+            const allTripsMap = new Map();
+            (state.data && Array.isArray(state.data.trips) ? state.data.trips : []).forEach(t => allTripsMap.set(t.id, t));
+            if (typeof getLiveTrips === 'function') {
+                (getLiveTrips() || []).forEach(t => allTripsMap.set(t.id, { ...allTripsMap.get(t.id), ...t }));
+            }
+            const allTrips = Array.from(allTripsMap.values());
+
+            const trips = allTrips.filter(t => {
+                // Check PO match across multiple aliases
+                const matchesPo = (t.poReceived === poId || t.po_received_number === poId || t.orderId === poId || t.order_id === poId || t.linkedPO === poId || t.poIssued === poId);
+                if (!matchesPo) return false;
+
+                // Company / Plant context check
+                if (state.currentCompany && t.companyId && t.companyId !== state.currentCompany && t.plantId !== state.currentCompany && t.plant_id !== state.currentCompany) {
+                    return false;
+                }
+
+                // Exclude trips locked to another GRN
+                if (t.grnId && t.grnId !== state.editingId && (!existingTripData || !savedData[t.id])) {
+                    return false;
+                }
+
+                // Date filter with ISO timestamp compatibility
+                if (fromDate || toDate) {
+                    const rawTripDate = (t.date || t.trip_date || t.createdAt || '').split('T')[0];
+                    if (fromDate && rawTripDate && rawTripDate < fromDate) return false;
+                    if (toDate && rawTripDate && rawTripDate > toDate) return false;
+                }
+
+                return true;
+            });
 
             if (trips.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="p-3 text-center text-gray-500">No trips found in this date range for the selected PO.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="p-3 text-center text-gray-500 font-medium">No trips/LR found for selected PO in this date range.</td></tr>';
             } else {
                 tbody.innerHTML = trips.map(t => {
                     const tripWt = parseFloat(t.netWeight) || 0;
@@ -14065,16 +14219,20 @@ document.getElementById('print-modal').classList.remove('hidden');
                     const saved = savedData[t.id];
                     const grnWt = saved ? saved.grnWeight : '';
                     const isChecked = !!saved || (!!state.editingId && t.grnId === state.editingId);
-                    return `<tr class="grn-trip-row" data-trip-id="${t.id}" data-trip-wt="${tripWt}" data-recv-wt="${recvWt}">
+                    const vehObj = (typeof getLiveVehicles === 'function' ? getLiveVehicles() : []).find(v => v.id === t.vehicle || v.vehicleNo === t.vehicle || v.id === t.vehicle_id);
+                    const vehDisplay = vehObj ? (vehObj.vehicleNo || vehObj.registrationNo) : (t.vehicleNo || t.vehicle || '-');
+                    const lrDisplay = t.lrNumber ? `LR: ${t.lrNumber}` : `Trip #${t.id}`;
+                    const tripDateDisplay = (t.date || t.trip_date || '-').split('T')[0];
+                    return `<tr class="grn-trip-row hover:bg-erp-light/50 transition-colors" data-trip-id="${t.id}" data-trip-wt="${tripWt}" data-recv-wt="${recvWt}">
                         <td class="p-2 text-center"><input type="checkbox" class="grn-trip-checkbox" value="${t.id}" ${isChecked ? 'checked' : ''} onchange="calcGrnTotals()"></td>
-                        <td class="p-2 font-bold">${t.id}</td>
-                        <td class="p-2">${t.vehicle || '-'}</td>
-                        <td class="p-2">${t.date || '-'}</td>
-                        <td class="p-2 text-right">${tripWt.toFixed(2)}</td>
-                        <td class="p-2 text-right">${recvWt.toFixed(2)}</td>
-                        <td class="p-2 text-right"><input type="number" step="0.01" class="grn-weight-input w-20 border border-gray-300 rounded px-1 py-0.5 text-right" value="${grnWt}" onchange="calcGrnTotals()"></td>
-                        <td class="p-2 text-right grn-shortage-cell font-medium">0.00</td>
-                        <td class="p-2"><input type="text" class="grn-docno-input w-24 border border-gray-300 rounded px-1 py-0.5" value="${saved ? saved.materialDocNumber || '' : ''}" placeholder="Doc No."></td>
+                        <td class="p-2 font-bold text-gray-800"><span class="text-xs bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded mr-1 font-semibold">${lrDisplay}</span><span class="text-gray-400 text-[11px]">(${t.id})</span></td>
+                        <td class="p-2 font-medium text-gray-700">${vehDisplay}</td>
+                        <td class="p-2 text-gray-600">${tripDateDisplay}</td>
+                        <td class="p-2 text-right font-medium">${tripWt.toFixed(2)}</td>
+                        <td class="p-2 text-right font-medium">${recvWt.toFixed(2)}</td>
+                        <td class="p-2 text-right"><input type="number" step="0.01" class="grn-weight-input w-24 border border-gray-300 rounded px-1.5 py-1 text-right focus:border-erp-main" value="${grnWt}" onchange="calcGrnTotals()" placeholder="0.00"></td>
+                        <td class="p-2 text-right grn-shortage-cell font-semibold text-gray-700">0.00</td>
+                        <td class="p-2"><input type="text" class="grn-docno-input w-24 border border-gray-300 rounded px-1.5 py-1 text-xs" value="${saved ? (saved.materialDocNumber || '') : ''}" placeholder="Doc No."></td>
                     </tr>`;
                 }).join('');
                 calcGrnTotals();
@@ -17008,12 +17166,17 @@ document.getElementById('print-modal').classList.remove('hidden');
             let safeSnapshot = recordData ? { ...recordData } : null;
             if (safeSnapshot && safeSnapshot.password) safeSnapshot.password = '******';
             
-            let detailString = `${action} performed on record ${recordData?.id || ''}`;
-            if (moduleKey === 'trips' && action === 'Create') detailString = `New Trip ${recordData.id} added (${recordData.vehicle || ''})`;
-            else if (moduleKey === 'trips' && action === 'Update') detailString = `Trip ${recordData.id} updated (Status: ${recordData.status || ''})`;
-            else if (action === 'Create') detailString = `Created new record ${recordData?.id || ''}`;
-            else if (action === 'Update') detailString = `Updated record ${recordData?.id || ''}`;
-            else if (action === 'Delete') detailString = `Deleted record ${recordData?.id || ''}`;
+            let detailString = `${action} performed on ${modulesConfig[moduleKey]?.title || moduleKey} ${recordData?.id || ''}`;
+            if (moduleKey === 'trips' && action === 'Create') detailString = `New Trip ${recordData.id} added (Vehicle: ${recordData.vehicle || recordData.vehicleNo || '-'})`;
+            else if (moduleKey === 'trips' && action === 'Update') detailString = `Trip ${recordData.id} updated (Status: ${recordData.status || '-'}, LR: ${recordData.lrNumber || '-'})`;
+            else if (moduleKey === 'grn' && action === 'Create') detailString = `Generated GRN ${recordData.id} for PO ${recordData.poRef || '-'}`;
+            else if (moduleKey === 'grn' && action === 'Update') detailString = `Updated GRN ${recordData.id} (Total Wt: ${recordData.totalWeight || 0} MT)`;
+            else if (moduleKey === 'invoices' && action === 'Create') detailString = `Created Invoice ${recordData.id} for ${recordData.client || '-'} (₹${recordData.totalAmount || 0})`;
+            else if (moduleKey === 'machineLogs') detailString = `${action} Machine Log ${recordData.id} for Machine ${recordData.machine || '-'}`;
+            else if (moduleKey === 'consumableLogs') detailString = `${action} Consumable Log ${recordData.id} for Item ${recordData.consumable || '-'}`;
+            else if (action === 'Create') detailString = `Created ${modulesConfig[moduleKey]?.title || moduleKey} ${recordData?.id || ''}`;
+            else if (action === 'Update') detailString = `Updated ${modulesConfig[moduleKey]?.title || moduleKey} ${recordData?.id || ''}`;
+            else if (action === 'Delete') detailString = `Deleted ${modulesConfig[moduleKey]?.title || moduleKey} ${recordData?.id || ''}`;
 
             const localAuditEntry = { 
                 id: generateId('AUD'), 
