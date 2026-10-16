@@ -17225,7 +17225,43 @@ document.getElementById('print-modal').classList.remove('hidden');
             }
         }
 
-        function showToast(message, type = 'success') { const toast = document.createElement('div'); let bg = 'bg-gray-800', icon = 'fa-check-circle text-green-400'; if(type === 'warning') { bg = 'bg-orange-600'; icon = 'fa-triangle-exclamation text-yellow-200'; } if(type === 'error') { bg = 'bg-red-600'; icon = 'fa-circle-xmark text-white'; } toast.className = `fixed bottom-4 right-4 ${bg} text-white px-4 py-2 rounded shadow-lg z-50 transform transition-transform translate-y-10 opacity-0 text-sm font-medium flex items-center gap-2`; toast.innerHTML = `<i class="fa-solid ${icon}"></i> ${message}`; document.body.appendChild(toast); setTimeout(() => toast.classList.remove('translate-y-10', 'opacity-0'), 10); setTimeout(() => { toast.classList.add('translate-y-10', 'opacity-0'); setTimeout(() => toast.remove(), 300); }, 3000); }
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            let bg = 'bg-gray-900 border-gray-700 text-white', icon = 'fa-check-circle text-green-400';
+            if (type === 'warning') {
+                bg = 'bg-amber-600 border-amber-500 text-white';
+                icon = 'fa-triangle-exclamation text-amber-200';
+            }
+            if (type === 'error') {
+                bg = 'bg-red-600 border-red-700 text-white shadow-2xl';
+                icon = 'fa-circle-xmark text-white';
+            }
+            // Use maximum z-index (z-[99999]) to guarantee toast floats ABOVE all open modal backdrops (z-[70] to z-[100])
+            toast.className = `fixed bottom-5 right-5 max-w-md ${bg} border px-4 py-3 rounded-lg shadow-2xl z-[99999] transform transition-all duration-300 translate-y-8 opacity-0 text-sm font-semibold flex items-start gap-3 pointer-events-auto`;
+            toast.style.zIndex = '99999';
+            toast.innerHTML = `
+                <i class="fa-solid ${icon} text-lg shrink-0 mt-0.5"></i>
+                <div class="flex-1 leading-snug break-words">${message}</div>
+                <button type="button" class="ml-2 text-white/80 hover:text-white shrink-0" onclick="this.parentElement.remove()">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            `;
+            document.body.appendChild(toast);
+            if (typeof requestAnimationFrame === 'function') {
+                requestAnimationFrame(() => {
+                    toast.classList.remove('translate-y-8', 'opacity-0');
+                });
+            } else {
+                setTimeout(() => {
+                    toast.classList.remove('translate-y-8', 'opacity-0');
+                }, 10);
+            }
+            const autoHideDelay = type === 'error' ? 6000 : 3500;
+            setTimeout(() => {
+                toast.classList.add('translate-y-8', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, autoHideDelay);
+        }
 
         // ============ DRIVER-FACING PAGE (opened via #driver-<tripId> link) ============
         function renderDriverPage(tripId) {
