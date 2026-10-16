@@ -3007,8 +3007,8 @@ const indianStates = [
                 liveTripId = matchingTrip.dbId;
             }
 
-            // 6. Entry number
-            const entryNumber = (record.entry_number || record.id || (typeof generateId === 'function' ? generateId('GAT') : `GAT-${Date.now()}`)).trim();
+            // 6. Entry number (Sequential GATE-1, GATE-2...)
+            const entryNumber = (record.entry_number || record.id || (typeof generateId === 'function' ? generateId('GATE', 'gateVerification') : `GATE-${Date.now()}`)).trim();
 
             // 7. Created by from authenticated user context (uses authenticated user UUID)
             const authUserUuid = (state.currentUser && state.currentUser.authUid) || (state.stage1AuthUser && state.stage1AuthUser.id) || (typeof activeAuthUid !== 'undefined' ? activeAuthUid : null);
@@ -3237,8 +3237,8 @@ const indianStates = [
                 totalCost = Number(totalCost.toFixed(2));
             }
 
-            // 7. Movement number
-            const movementNumber = (record.movement_number || record.movementNumber || record.id || (typeof generateId === 'function' ? generateId('CON') : `CON-${Date.now()}`)).trim();
+            // 7. Movement number (Sequential CML-1, CML-2...)
+            const movementNumber = (record.movement_number || record.movementNumber || record.id || (typeof generateId === 'function' ? generateId('CML', 'consumableLogs') : `CML-${Date.now()}`)).trim();
 
             // 8. Issued to & remarks
             const issuedTo = (record.issuedTo || record.issued_to || '').trim() || null;
@@ -3388,8 +3388,8 @@ const indianStates = [
                 financialYear = getFinancialYear(tripDate, plantId);
             }
 
-            // 12. Trip number
-            const tripNumber = (record.tripNumber || record.trip_number || record.id || (typeof generateId === 'function' ? generateId('TRP') : `TRP-${Date.now()}`)).trim();
+            // 12. Trip number (Sequential LR-1, LR-2...)
+            const tripNumber = (record.tripNumber || record.trip_number || record.id || (typeof generateId === 'function' ? generateId('LR', 'trips') : `LR-${Date.now()}`)).trim();
 
             // 13. Created by / Updated by (authenticated user UUID convention)
             const authUserUuid = (state.currentUser && state.currentUser.authUid) || (state.stage1AuthUser && state.stage1AuthUser.id) || (typeof activeAuthUid !== 'undefined' ? activeAuthUid : null);
@@ -3776,8 +3776,8 @@ const indianStates = [
         function buildLiveGrnPayload(record) {
             if (!record) throw new Error('No record data provided');
 
-            // 1. GRN Number (required)
-            const grnNumber = (record.id || record.grn_number || record.grnNumber || (typeof generateId === 'function' ? generateId('GRN') : `GRN-${Date.now()}`)).trim();
+            // 1. GRN Number (required, Sequential GRN-1, GRN-2...)
+            const grnNumber = (record.id || record.grn_number || record.grnNumber || (typeof generateId === 'function' ? generateId('GRN', 'grn') : `GRN-${Date.now()}`)).trim();
 
             // 2. Dates (required)
             const fromDate = (record.fromDate || record.from_date || '').split('T')[0].trim();
@@ -16829,7 +16829,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                 return showToast('This ID already exists! Please use a unique ID.', 'error');
             }
 
-            const newId = state.editingId || manualId || generateId(moduleKey.substring(0,3).toUpperCase());
+            const newId = state.editingId || manualId || generateId(null, moduleKey);
             const newRecord = { id: newId };
 
             if(moduleKey === 'rolesMaster') {
@@ -17267,7 +17267,146 @@ document.getElementById('print-modal').classList.remove('hidden');
         // --- 7. UTILITIES & UI HELPERS ---
         function showModalWindow() { const modal = document.getElementById('app-modal'); const modalContent = document.getElementById('modal-content'); modal.classList.remove('hidden'); setTimeout(() => { modalContent.classList.remove('scale-95', 'opacity-0'); modalContent.classList.add('scale-100', 'opacity-100'); }, 10); }
         function closeModal() { const el = document.getElementById('modal-content'); el.classList.remove('scale-100', 'opacity-100'); el.classList.add('scale-95', 'opacity-0'); setTimeout(() => document.getElementById('app-modal').classList.add('hidden'), 200); }
-        function generateId(prefix) { return `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`; }
+        const modulePrefixMap = {
+            'trips': 'LR',
+            'gateVerification': 'GATE',
+            'grn': 'GRN',
+            'consumableLogs': 'CML',
+            'machineLogs': 'ML',
+            'partiesMaster': 'PAR',
+            'vehicleMaster': 'VEH',
+            'machineryMaster': 'MAC',
+            'consumablesMaster': 'CON',
+            'employees': 'EMP',
+            'usersMaster': 'USER',
+            'rolesMaster': 'ROLE',
+            'unitMaster': 'UNT',
+            'poTypeMaster': 'POT',
+            'itemMaster': 'ITM',
+            'shiftsMaster': 'SH',
+            'templatesMaster': 'TMP',
+            'signatureMaster': 'SIGN',
+            'auditLogs': 'AUD',
+            'payrollSettings': 'PAYSET',
+            'systemSettings': 'SYS'
+        };
+
+        const prefixToModuleMap = {
+            'LR': 'trips',
+            'TRP': 'trips',
+            'GATE': 'gateVerification',
+            'GAT': 'gateVerification',
+            'GRN': 'grn',
+            'CML': 'consumableLogs',
+            'ML': 'machineLogs',
+            'PAR': 'partiesMaster',
+            'VEH': 'vehicleMaster',
+            'MAC': 'machineryMaster',
+            'CON': 'consumablesMaster',
+            'EMP': 'employees',
+            'USER': 'usersMaster',
+            'ROLE': 'rolesMaster',
+            'UNT': 'unitMaster',
+            'POT': 'poTypeMaster',
+            'ITM': 'itemMaster',
+            'SH': 'shiftsMaster',
+            'TMP': 'templatesMaster',
+            'TMPL': 'templatesMaster',
+            'SIGN': 'signatureMaster',
+            'AUD': 'auditLogs'
+        };
+
+        function getNextSequentialId(moduleKey, prefix) {
+            if (!moduleKey && prefix) {
+                moduleKey = prefixToModuleMap[prefix.toUpperCase()] || (typeof state !== 'undefined' ? state.currentModule : '') || '';
+            }
+            if (!prefix) {
+                prefix = modulePrefixMap[moduleKey] || (moduleKey ? moduleKey.substring(0, 3).toUpperCase() : 'REC');
+            }
+
+            // Standardize operational prefixes
+            if (prefix.toUpperCase() === 'TRP' || moduleKey === 'trips') prefix = 'LR';
+            if (prefix.toUpperCase() === 'GAT' || moduleKey === 'gateVerification') prefix = 'GATE';
+            if (prefix.toUpperCase() === 'TMPL') prefix = 'TMP';
+
+            let allRecords = [];
+            const getterMap = {
+                trips: typeof getLiveTrips === 'function' ? getLiveTrips : null,
+                gateVerification: typeof getLiveGateEntries === 'function' ? getLiveGateEntries : null,
+                grn: typeof getLiveGrn === 'function' ? getLiveGrn : null,
+                machineLogs: typeof getLiveMachineLogs === 'function' ? getLiveMachineLogs : null,
+                consumableLogs: typeof getLiveConsumableLogs === 'function' ? getLiveConsumableLogs : null,
+                partiesMaster: typeof getLiveParties === 'function' ? getLiveParties : null,
+                vehicleMaster: typeof getLiveVehicles === 'function' ? getLiveVehicles : null,
+                machineryMaster: typeof getLivePlantMachinery === 'function' ? getLivePlantMachinery : null,
+                consumablesMaster: typeof getLiveConsumables === 'function' ? getLiveConsumables : null,
+                employees: typeof getLiveEmployees === 'function' ? getLiveEmployees : null,
+                unitMaster: typeof getLiveUnits === 'function' ? getLiveUnits : null,
+                poTypeMaster: typeof getLivePoTypes === 'function' ? getLivePoTypes : null,
+                itemMaster: typeof getLiveItems === 'function' ? getLiveItems : null,
+                shiftsMaster: typeof getLiveShifts === 'function' ? getLiveShifts : null,
+                rolesMaster: typeof getLiveRoles === 'function' ? getLiveRoles : null,
+                signatureMaster: typeof getLiveSignatures === 'function' ? getLiveSignatures : null,
+                templatesMaster: typeof getLiveTemplates === 'function' ? getLiveTemplates : null,
+                auditLogs: typeof getLiveAuditLogs === 'function' ? getLiveAuditLogs : null
+            };
+
+            if (moduleKey && getterMap[moduleKey]) {
+                try {
+                    const res = getterMap[moduleKey]();
+                    if (Array.isArray(res)) allRecords = allRecords.concat(res);
+                } catch (_) {}
+            }
+            if (typeof state !== 'undefined') {
+                if (moduleKey && state.liveMasters && Array.isArray(state.liveMasters[moduleKey])) {
+                    allRecords = allRecords.concat(state.liveMasters[moduleKey]);
+                }
+                if (moduleKey && state.data && Array.isArray(state.data[moduleKey])) {
+                    allRecords = allRecords.concat(state.data[moduleKey]);
+                }
+            }
+
+            const cleanPrefix = prefix.replace(/[^a-zA-Z0-9]/g, '');
+            const regex = new RegExp(`^${cleanPrefix}[-_\\s]?(\\d+)$`, 'i');
+
+            let maxNum = 0;
+            const isZeroPadded = (prefix.toUpperCase() === 'USER');
+
+            allRecords.forEach(item => {
+                if (!item) return;
+                const candidates = [
+                    item.id,
+                    item.tripNumber, item.trip_number,
+                    item.entry_number, item.entryNumber,
+                    item.grn_number, item.grnNumber,
+                    item.movement_number, item.movementNumber,
+                    item.po_number, item.poNumber,
+                    item.legacy_user_id
+                ];
+                for (const val of candidates) {
+                    if (typeof val === 'string' || typeof val === 'number') {
+                        const str = String(val).trim();
+                        const match = str.match(regex);
+                        if (match && match[1]) {
+                            const num = parseInt(match[1], 10);
+                            if (!isNaN(num) && num > maxNum) {
+                                maxNum = num;
+                            }
+                        }
+                    }
+                }
+            });
+
+            const nextNum = maxNum + 1;
+            if (isZeroPadded) {
+                return `${prefix}-${String(nextNum).padStart(3, '0')}`;
+            }
+            return `${prefix}-${nextNum}`;
+        }
+
+        function generateId(prefix, moduleKey) {
+            return getNextSequentialId(moduleKey, prefix);
+        }
 
         // ============ DERIVED STATUS & PO CONSUMPTION ============
         // An unpaid invoice past its due date is Overdue — derived live, never stored, so it can't go stale.
