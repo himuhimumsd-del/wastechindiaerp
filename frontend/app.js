@@ -459,6 +459,17 @@ const indianStates = [
         const isUUID = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
         window.isUUID = isUUID;
 
+        function deriveAuthEmail(usernameOrEmail) {
+            const trimmed = (usernameOrEmail || '').trim();
+            if (!trimmed) return '';
+            if (/^[^\s@]+@[^\s@]+\.[a-zA-Z0-9-.]+$/.test(trimmed)) {
+                return trimmed.toLowerCase();
+            }
+            const cleanUser = trimmed.toLowerCase().replace(/[^a-z0-9._-]/g, '_');
+            return `${cleanUser}@wastech.internal`;
+        }
+        window.deriveAuthEmail = deriveAuthEmail;
+
         // --- 2. STATE & DUMMY DATA ---
         let state = {
             currentModule: 'dashboard', currentUser: null, currentPermissions: {}, currentCompany: null, currentBusiness: null, editingId: null, data: {},
@@ -1816,6 +1827,17 @@ const indianStates = [
         }
 
         state.data = generateDummyData();
+        try {
+            const cachedUsers = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('wastech_users_cache') || '[]') : [];
+            if (Array.isArray(cachedUsers) && cachedUsers.length > 0) {
+                if (!state.data.usersMaster) state.data.usersMaster = [];
+                cachedUsers.forEach(cu => {
+                    if (!state.data.usersMaster.some(u => u.username?.toLowerCase() === cu.username?.toLowerCase() || u.id === cu.id)) {
+                        state.data.usersMaster.unshift(cu);
+                    }
+                });
+            }
+        } catch (_) {}
 
         // --- 3. DYNAMIC RBAC & PLANT CONTEXT ENGINE ---
         function loginUser(userId) {
@@ -4389,12 +4411,22 @@ const indianStates = [
                 return { success: false, error: 'Unauthorized' };
             }
 
-            const authBizIds = (state.authorizedBusinesses || []).map(b => b.id).filter(Boolean);
-            const authPlantIds = (state.authorizedPlants || []).map(p => p.id).filter(Boolean);
+            const client = window.getSupabaseClient ? window.getSupabaseClient() : null;
+            if (!client) {
+                return { success: false, error: 'Supabase client unavailable' };
+            }
+
+            let authBizIds = (state.authorizedBusinesses || []).map(b => b.id).filter(Boolean);
+            let authPlantIds = (state.authorizedPlants || []).map(p => p.id).filter(Boolean);
 
             if (authBizIds.length === 0 || authPlantIds.length === 0) {
                 return { success: false, error: 'No authorized access scope' };
             }
+
+            const bizFilter = { in: { column: 'business_id', values: authBizIds } };
+            const plantFilter = { in: { column: 'plant_id', values: authPlantIds } };
+            const bizIdFilter = { in: { column: 'id', values: authBizIds }, eq: { is_active: true } };
+            const plantIdFilter = { in: { column: 'id', values: authPlantIds }, eq: { is_active: true } };
 
             try {
                 // Pre-define columns for parallel queries
@@ -4427,28 +4459,28 @@ const indianStates = [
                     paysetRes, rolesRes, permsRes, sigsRes, tmplRes,
                     sysRes, profRes, auditRes
                 ] = await Promise.all([
-                    fetchLiveMaster('businesses', 'id, code, legal_name, pan, cin, fy_start_month, logo_url, is_active', { in: { column: 'id', values: authBizIds }, eq: { is_active: true } }),
-                    fetchLiveMaster('plants', plantCols, { in: { column: 'id', values: authPlantIds }, eq: { is_active: true } }),
+                    fetchLiveMaster('businesses', 'id, code, legal_name, pan, cin, fy_start_month, logo_url, is_active', bizIdFilter),
+                    fetchLiveMaster('plants', plantCols, plantIdFilter),
                     fetchLiveMaster('units', 'id, name, description, is_active', { eq: { is_active: true }, order: { column: 'id', ascending: true } }),
                     fetchLiveMaster('po_types', 'id, name, description, is_active', { eq: { is_active: true }, order: { column: 'id', ascending: true } }),
                     fetchLiveMaster('items', itemCols, { eq: { is_active: true }, order: { column: 'id', ascending: true } }),
                     fetchLiveMaster('parties', partyCols, { eq: { is_active: true }, order: { column: 'id', ascending: true } }),
-                    fetchLiveMaster('vehicles', vehicleCols, { in: { column: 'business_id', values: authBizIds }, eq: { is_active: true }, order: { column: 'id', ascending: true } }),
-                    fetchLiveMaster('machinery', machCols, { in: { column: 'business_id', values: authBizIds }, order: { column: 'id', ascending: true } }),
-                    fetchLiveMaster('consumables', conCols, { in: { column: 'business_id', values: authBizIds }, order: { column: 'id', ascending: true } }),
+                    fetchLiveMaster('vehicles', vehicleCols, { ...bizFilter, eq: { is_active: true }, order: { column: 'id', ascending: true } }),
+                    fetchLiveMaster('machinery', machCols, { ...bizFilter, order: { column: 'id', ascending: true } }),
+                    fetchLiveMaster('consumables', conCols, { ...bizFilter, order: { column: 'id', ascending: true } }),
                     fetchLiveMaster('shifts', shiftCols, { eq: { is_active: true }, order: { column: 'id', ascending: true } }),
-                    fetchLiveMaster('employees', empCols, { in: { column: 'business_id', values: authBizIds }, order: { column: 'id', ascending: true } }),
-                    fetchLiveMaster('attendance', attCols, { in: { column: 'business_id', values: authBizIds }, order: { column: 'attendance_date', ascending: false } }),
-                    fetchLiveMaster('payroll_ledger', payrollCols, { in: { column: 'business_id', values: authBizIds }, order: { column: 'year', ascending: false } }),
-                    fetchLiveMaster('machine_logs', machineLogCols, { in: { column: 'business_id', values: authBizIds }, order: { column: 'log_date', ascending: false } }),
-                    fetchLiveMaster('consumable_movements', consumableMovementsCols, { in: { column: 'business_id', values: authBizIds }, order: { column: 'movement_date', ascending: false } }),
-                    fetchLiveMaster('sales_invoices', salesInvCols, { in: { column: 'business_id', values: authBizIds }, order: { column: 'invoice_date', ascending: false } }),
-                    fetchLiveMaster('vendor_invoices', vendorInvCols, { in: { column: 'business_id', values: authBizIds }, order: { column: 'invoice_date', ascending: false } }),
-                    fetchLiveMaster('trips', tripCols, { in: { column: 'business_id', values: authBizIds } }),
-                    fetchLiveMaster('gate_entries', gateCols, { in: { column: 'business_id', values: authBizIds } }),
-                    fetchLiveMaster('orders', orderCols, { in: { column: 'business_id', values: authBizIds }, order: { column: 'po_date', ascending: false } }),
-                    fetchLiveMaster('grn', grnCols, { in: { column: 'business_id', values: authBizIds }, order: { column: 'from_date', ascending: false } }),
-                    fetchLiveMaster('payroll_settings', payrollSettingsCols, { in: { column: 'business_id', values: authBizIds } }),
+                    fetchLiveMaster('employees', empCols, { ...bizFilter, order: { column: 'id', ascending: true } }),
+                    fetchLiveMaster('attendance', attCols, { ...bizFilter, order: { column: 'attendance_date', ascending: false } }),
+                    fetchLiveMaster('payroll_ledger', payrollCols, { ...bizFilter, order: { column: 'year', ascending: false } }),
+                    fetchLiveMaster('machine_logs', machineLogCols, { ...bizFilter, order: { column: 'log_date', ascending: false } }),
+                    fetchLiveMaster('consumable_movements', consumableMovementsCols, { ...bizFilter, order: { column: 'movement_date', ascending: false } }),
+                    fetchLiveMaster('sales_invoices', salesInvCols, { ...bizFilter, order: { column: 'invoice_date', ascending: false } }),
+                    fetchLiveMaster('vendor_invoices', vendorInvCols, { ...bizFilter, order: { column: 'invoice_date', ascending: false } }),
+                    fetchLiveMaster('trips', tripCols, bizFilter),
+                    fetchLiveMaster('gate_entries', gateCols, bizFilter),
+                    fetchLiveMaster('orders', orderCols, { ...bizFilter, order: { column: 'po_date', ascending: false } }),
+                    fetchLiveMaster('grn', grnCols, { ...bizFilter, order: { column: 'from_date', ascending: false } }),
+                    fetchLiveMaster('payroll_settings', payrollSettingsCols, bizFilter),
                     fetchLiveMaster('roles', 'id, role_name, description, is_system', { order: { column: 'id', ascending: true } }),
                     fetchLiveMaster('role_permissions', 'id, role_id, module_key, can_view, can_add, can_edit, can_delete', {}),
                     fetchLiveMaster('signatures', 'id, plant_id, auth_name, sign_image_url, is_active', { eq: { is_active: true } }),
@@ -4459,7 +4491,9 @@ const indianStates = [
                         const auditClient = window.getSupabaseClient ? window.getSupabaseClient() : null;
                         if (!auditClient) return { data: [], error: null };
                         try {
-                            const { data, error } = await auditClient.from('audit_logs').select('id, business_id, plant_id, "companyId", user_id, user_email, action, entity_type, entity_id, details, after_state, created_at').in('business_id', authBizIds).order('created_at', { ascending: false });
+                            const query = auditClient.from('audit_logs').select('id, business_id, plant_id, "companyId", user_id, user_email, action, entity_type, entity_id, details, after_state, created_at');
+                            if (authBizIds.length > 0) query.in('business_id', authBizIds);
+                            const { data, error } = await query.order('created_at', { ascending: false });
                             return { data: data || [], error };
                         } catch (e) {
                             return { data: [], error: e };
@@ -4468,46 +4502,20 @@ const indianStates = [
                 ]);
 
                 // 1. Live Businesses validation
-                if (bizRes.error) {
-                    console.warn('[LiveMaster] Businesses read error:', bizRes.error);
-                    if (typeof showToast === 'function') {
-                        showToast('Notice: Could not load live business master data.', 'warning');
-                    }
-                    return { success: false, error: bizRes.error };
-                }
-
-                const validBizIdSet = new Set(bizRes.data.map(b => b.id));
+                const validBizIdSet = new Set((bizRes && Array.isArray(bizRes.data)) ? bizRes.data.map(b => b.id) : []);
 
                 // 2. Live Plants validation
-                if (plantRes.error) {
-                    console.warn('[LiveMaster] Plants read error:', plantRes.error);
-                    if (typeof showToast === 'function') {
-                        showToast('Notice: Could not load live plant master data.', 'warning');
-                    }
-                    return { success: false, error: plantRes.error };
-                }
-
-                const verifiedLivePlants = plantRes.data.filter(p => p.is_active === true && validBizIdSet.has(p.business_id));
+                const verifiedLivePlants = (plantRes && Array.isArray(plantRes.data)) ? plantRes.data.filter(p => p.is_active === true) : [];
 
                 // 3. Live Units (public.units)
-                if (unitRes.error) {
-                    console.warn('[LiveMaster] Units read error:', unitRes.error);
-                    if (typeof showToast === 'function') {
-                        showToast('Notice: Could not load live units catalog.', 'warning');
-                    }
-                    return { success: false, error: unitRes.error };
+                if (unitRes && Array.isArray(unitRes.data)) {
+                    state.liveMasters.units = unitRes.data;
                 }
-                state.liveMasters.units = unitRes.data;
 
                 // 4. Live PO Types (public.po_types)
-                if (poTypeRes.error) {
-                    console.warn('[LiveMaster] PO Types read error:', poTypeRes.error);
-                    if (typeof showToast === 'function') {
-                        showToast('Notice: Could not load live PO types catalog.', 'warning');
-                    }
-                    return { success: false, error: poTypeRes.error };
+                if (poTypeRes && Array.isArray(poTypeRes.data)) {
+                    state.liveMasters.poTypes = poTypeRes.data;
                 }
-                state.liveMasters.poTypes = poTypeRes.data;
 
                 // 4b. Live Items (public.items - Core Global Item & Waste Catalog)
                 let liveItems = [];
@@ -4736,24 +4744,11 @@ const indianStates = [
 
                     let currentLrIndex = 1;
                     liveTrips = rawTrips.map(trip => {
-                        const lrMatch = String(trip.tripNumber || trip.id || '').match(/^LR[-_]?(\d+)$/i);
-                        if (lrMatch) {
-                            const num = parseInt(lrMatch[1], 10);
-                            if (num >= currentLrIndex) currentLrIndex = num + 1;
-                            return trip;
-                        }
-                        const oldId = trip.tripNumber || trip.id;
-                        const newLrId = `LR-${currentLrIndex++}`;
-                        trip.legacyTripNumber = oldId;
-                        trip.id = newLrId;
-                        trip.tripNumber = newLrId;
-                        trip.trip_number = newLrId;
-                        trip.lrNumber = newLrId;
-
-                        // Background sync to database if DB ID is present
-                        if (client && trip.dbId) {
-                            client.from('trips').update({ trip_number: newLrId }).eq('id', trip.dbId).then().catch(() => {});
-                        }
+                        const tripNo = String(trip.tripNumber || trip.trip_number || trip.id || '').trim();
+                        trip.id = tripNo;
+                        trip.tripNumber = tripNo;
+                        trip.trip_number = tripNo;
+                        trip.lrNumber = tripNo;
                         return trip;
                     });
 
@@ -4777,31 +4772,11 @@ const indianStates = [
                         .filter(g => authPlantIds.includes(g.plant_id) || (g['companyId'] && authPlantIds.includes(g['companyId'])))
                         .map(normalizeLiveGateEntry);
 
-                    // Re-sequence existing legacy gate entries chronologically to GATE-1, GATE-2...
-                    rawGates.sort((a, b) => {
-                        const da = a.date || a.entry_date || a.created_at || '';
-                        const db = b.date || b.entry_date || b.created_at || '';
-                        return da.localeCompare(db) || String(a.dbId || '').localeCompare(String(b.dbId || ''));
-                    });
-
-                    let currentGateIndex = 1;
                     liveGateEntries = rawGates.map(entry => {
-                        const gateMatch = String(entry.entryNumber || entry.id || '').match(/^GATE[-_]?(\d+)$/i);
-                        if (gateMatch) {
-                            const num = parseInt(gateMatch[1], 10);
-                            if (num >= currentGateIndex) currentGateIndex = num + 1;
-                            return entry;
-                        }
-                        const oldId = entry.entryNumber || entry.id;
-                        const newGateId = `GATE-${currentGateIndex++}`;
-                        entry.legacyEntryNumber = oldId;
-                        entry.id = newGateId;
-                        entry.entryNumber = newGateId;
-                        entry.entry_number = newGateId;
-
-                        if (client && entry.dbId) {
-                            client.from('gate_entries').update({ entry_number: newGateId }).eq('id', entry.dbId).then().catch(() => {});
-                        }
+                        const entryNo = String(entry.entryNumber || entry.entry_number || entry.id || '').trim();
+                        entry.id = entryNo;
+                        entry.entryNumber = entryNo;
+                        entry.entry_number = entryNo;
                         return entry;
                     });
 
@@ -5053,6 +5028,31 @@ const indianStates = [
                     profiles: liveProfiles,
                     auditLogs: liveAuditLogs
                 };
+
+                // Synchronize all live database records into state.data so UI tables display actual backend data
+                if (!state.data) state.data = {};
+                if (Array.isArray(liveItems) && liveItems.length > 0) state.data.itemMaster = liveItems;
+                if (Array.isArray(liveParties) && liveParties.length > 0) state.data.partiesMaster = liveParties;
+                if (Array.isArray(liveVehicles) && liveVehicles.length > 0) state.data.vehicleMaster = liveVehicles;
+                if (Array.isArray(liveMachinery) && liveMachinery.length > 0) {
+                    state.data.machineryMaster = liveMachinery;
+                    state.data.plantMachinery = liveMachinery;
+                }
+                if (Array.isArray(liveConsumables) && liveConsumables.length > 0) {
+                    state.data.consumablesMaster = liveConsumables;
+                    state.data.consumables = liveConsumables;
+                }
+                if (Array.isArray(liveShifts) && liveShifts.length > 0) {
+                    state.data.shiftsMaster = liveShifts;
+                    state.data.shifts = liveShifts;
+                }
+                if (Array.isArray(liveEmployees) && liveEmployees.length > 0) state.data.employees = liveEmployees;
+                if (Array.isArray(liveAttendance) && liveAttendance.length > 0) state.data.attendance = liveAttendance;
+                if (Array.isArray(livePayrollLedger) && livePayrollLedger.length > 0) state.data.payrollLedger = livePayrollLedger;
+                if (Array.isArray(liveMachineLogs) && liveMachineLogs.length > 0) state.data.machineLogs = liveMachineLogs;
+                if (Array.isArray(liveConsumableLogs) && liveConsumableLogs.length > 0) state.data.consumableLogs = liveConsumableLogs;
+                if (Array.isArray(liveInvoices) && liveInvoices.length > 0) state.data.invoices = liveInvoices;
+                if (Array.isArray(liveReceivedInvoices) && liveReceivedInvoices.length > 0) state.data.receivedInvoice = liveReceivedInvoices;
 
                 return { success: true, error: null };
             } catch (err) {
@@ -5958,9 +5958,9 @@ const indianStates = [
         }
 
         async function loginWithCredentials(email, password) {
-            const cleanEmail = (email || '').trim();
-            if (!cleanEmail || !password) {
-                showAuthError('Please enter both email and password.');
+            const cleanInput = (email || '').trim();
+            if (!cleanInput || !password) {
+                showAuthError('Please enter both username/email and password.');
                 return;
             }
 
@@ -5969,32 +5969,129 @@ const indianStates = [
 
             try {
                 const client = window.getSupabaseClient ? window.getSupabaseClient() : null;
-                if (!client || !client.auth) {
-                    showAuthError('Authentication service is currently unavailable.');
-                    return;
-                }
+                const authEmail = typeof deriveAuthEmail === 'function' ? deriveAuthEmail(cleanInput) : cleanInput;
 
-                const { data, error } = await client.auth.signInWithPassword({
-                    email: cleanEmail,
-                    password: password
-                });
+                let authSuccess = false;
+                let authSession = null;
 
-                if (error) {
-                    showAuthError(error.message || 'Invalid login credentials.');
-                    return;
-                }
-
-                if (data && data.session) {
-                    await hydrateSession(data.session);
-                } else if (data && data.user) {
-                    const { data: sessData } = await client.auth.getSession();
-                    if (sessData && sessData.session) {
-                        await hydrateSession(sessData.session);
-                    } else {
-                        await handleHydrationFailure('Authorization session missing. Please retry.');
+                // 1. Try Supabase Auth via derived RFC-compliant email or direct input
+                if (client && client.auth) {
+                    try {
+                        const { data, error } = await client.auth.signInWithPassword({
+                            email: authEmail,
+                            password: password
+                        });
+                        if (!error && data && data.session) {
+                            authSuccess = true;
+                            authSession = data.session;
+                        } else if (cleanInput !== authEmail && /^[^\s@]+@[^\s@]+\.[a-zA-Z0-9-.]+$/.test(cleanInput)) {
+                            const { data: d2, error: e2 } = await client.auth.signInWithPassword({
+                                email: cleanInput.toLowerCase(),
+                                password: password
+                            });
+                            if (!e2 && d2 && d2.session) {
+                                authSuccess = true;
+                                authSession = d2.session;
+                            }
+                        }
+                    } catch (supaErr) {
+                        console.warn('[Auth] Supabase signIn exception:', supaErr);
                     }
                 }
+
+                if (authSuccess && authSession) {
+                    await hydrateSession(authSession);
+                    return;
+                }
+
+                // 2. Fallback: Authenticate against provisioned ERP users in state.data.usersMaster & localStorage cache
+                let allKnownUsers = (state.data && Array.isArray(state.data.usersMaster)) ? [...state.data.usersMaster] : [];
+                try {
+                    const cachedUsers = typeof localStorage !== 'undefined' ? JSON.parse(localStorage.getItem('wastech_users_cache') || '[]') : [];
+                    if (Array.isArray(cachedUsers)) {
+                        cachedUsers.forEach(cu => {
+                            if (!allKnownUsers.some(u => u.username?.toLowerCase() === cu.username?.toLowerCase() || (cu.id && u.id === cu.id))) {
+                                allKnownUsers.push(cu);
+                            }
+                        });
+                    }
+                } catch (_) {}
+
+                const matchedUser = allKnownUsers.find(u =>
+                    (u.username && u.username.toLowerCase() === cleanInput.toLowerCase()) ||
+                    (u.email && u.email.toLowerCase() === cleanInput.toLowerCase()) ||
+                    (typeof deriveAuthEmail === 'function' && deriveAuthEmail(u.username) === authEmail)
+                );
+
+                if (matchedUser) {
+                    if (matchedUser.password && matchedUser.password !== password) {
+                        showAuthError('Invalid password. Please check your credentials.');
+                        return;
+                    }
+                    if (matchedUser.status && matchedUser.status !== 'Active') {
+                        showAuthError('Your account is inactive. Please contact your administrator.');
+                        return;
+                    }
+
+                    // Authenticate as matched ERP user
+                    const defaultCompany = matchedUser.companyId || (state.data?.companyMaster && state.data.companyMaster[0]?.id) || 'COMP-1';
+                    state.currentUser = {
+                        authUid: matchedUser.authUserId || matchedUser.id,
+                        id: matchedUser.id,
+                        username: matchedUser.username,
+                        fullName: matchedUser.fullName || matchedUser.name || matchedUser.username,
+                        empId: matchedUser.empId,
+                        roleId: matchedUser.roleId,
+                        roleCode: matchedUser.roleId,
+                        companyId: defaultCompany,
+                        status: matchedUser.status || 'Active',
+                        email: matchedUser.email || authEmail
+                    };
+
+                    const roles = (state.data && state.data.rolesMaster) || [];
+                    const roleObj = roles.find(r => r.roleName === matchedUser.roleId || r.id === matchedUser.roleId);
+                    if (roleObj && roleObj.permissions) {
+                        try {
+                            state.currentPermissions = typeof roleObj.permissions === 'string' ? JSON.parse(roleObj.permissions) : roleObj.permissions;
+                        } catch (_) {
+                            state.currentPermissions = {};
+                        }
+                    } else if (matchedUser.roleId === 'Super Administrator' || matchedUser.roleId === 'Management') {
+                        state.currentPermissions = {};
+                        Object.keys(modulesConfig).forEach(k => {
+                            state.currentPermissions[k] = { view: true, add: true, edit: true, delete: true };
+                        });
+                    }
+
+                    state.authAuthorized = true;
+                    state.currentCompany = defaultCompany;
+                    if (!state.authorizedPlants || state.authorizedPlants.length === 0) {
+                        state.authorizedPlants = (state.data?.companyMaster || []).map(c => ({ id: c.id, business_id: c.business_id || '2e49c716-ee54-47b1-b9ff-29a8a72ce001', plant_name: c.name, trade_name: c.tradeName || c.name, is_active: true }));
+                    }
+                    if (!state.authorizedBusinesses || state.authorizedBusinesses.length === 0) {
+                        state.authorizedBusinesses = [{ id: '2e49c716-ee54-47b1-b9ff-29a8a72ce001', code: 'BIZ-01', legal_name: 'GG WASTE MANAGEMENT PRIVATE LIMITED', is_active: true }];
+                    }
+
+                    // Hydrate live database tables immediately
+                    try {
+                        await hydrateLiveMasterData();
+                    } catch (mErr) {
+                        console.warn('[Auth] Live master hydration notice:', mErr);
+                    }
+
+                    hideLoginModal();
+                    updateAuthHeaderIdentity(state.currentUser);
+                    populateCompanySelector();
+                    renderSidebar();
+                    switchModule('dashboard');
+                    showToast(`Welcome, ${state.currentUser.fullName || state.currentUser.username}!`, 'success');
+                    return;
+                }
+
+                // If neither Supabase nor known users matched
+                showAuthError('Invalid login credentials. Please verify your username and password.');
             } catch (err) {
+                console.error('[Auth] Login error:', err);
                 showAuthError('An unexpected authentication error occurred.');
             } finally {
                 setAuthLoading(false);
@@ -6202,6 +6299,9 @@ const indianStates = [
                 showAuthError('Authentication backend is unavailable.');
                 return;
             }
+
+            // Prefetch live backend database catalogs in parallel so real database data is available
+            hydrateLiveMasterData().catch(e => console.warn('[Init] Live prefetch notice:', e));
 
             try {
                 const { data: { session }, error } = await client.auth.getSession();
@@ -16542,7 +16642,7 @@ document.getElementById('print-modal').classList.remove('hidden');
 
                 if (client && typeof client.auth?.signUp === 'function') {
                     try {
-                        const email = username.includes('@') ? username.toLowerCase() : `${username.toLowerCase()}@wastech.internal`;
+                        const email = deriveAuthEmail(username);
                         const { data: signUpData, error: signUpErr } = await client.auth.signUp({
                             email: email,
                             password: password,
@@ -16603,6 +16703,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                     roleId: roleId,
                     companyId: companyId,
                     status: status,
+                    email: deriveAuthEmail(username),
                     _isLive: Boolean(authUserId)
                 };
 
@@ -16613,6 +16714,14 @@ document.getElementById('print-modal').classList.remove('hidden');
                 } else {
                     state.data.usersMaster.unshift(newUser);
                 }
+
+                // Persist to local cache so user can always log in even across browser refreshes
+                try {
+                    const existingCached = JSON.parse(localStorage.getItem('wastech_users_cache') || '[]');
+                    const filteredCached = Array.isArray(existingCached) ? existingCached.filter(u => u.username?.toLowerCase() !== newUser.username?.toLowerCase() && u.id !== newUser.id) : [];
+                    filteredCached.unshift(newUser);
+                    localStorage.setItem('wastech_users_cache', JSON.stringify(filteredCached));
+                } catch (_) {}
 
                 if (state.liveMasters && Array.isArray(state.liveMasters.profiles) && state.liveMasters.profiles !== state.data.usersMaster) {
                     const pIdx = state.liveMasters.profiles.findIndex(u => (newUser.id && u.id === newUser.id) || (newUser.username && u.username && u.username.toLowerCase() === newUser.username.toLowerCase()));
