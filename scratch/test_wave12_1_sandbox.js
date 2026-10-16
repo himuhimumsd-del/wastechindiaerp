@@ -86,6 +86,8 @@ const mockElements = {
     'field_content': new MockElement('field_content'),
     'field_type': new MockElement('field_type'),
     'field_status': new MockElement('field_status'),
+    'field_username': new MockElement('field_username'),
+    'field_password': new MockElement('field_password'),
     'field_empId': new MockElement('field_empId'),
     'field_roleId': new MockElement('field_roleId'),
     'field_companyId': new MockElement('field_companyId')
@@ -382,13 +384,32 @@ async function runTests() {
     assert.strictEqual(capturedCalls.length, 0, 'No recursion when module is auditLogs');
     console.log('✓ Test 7: Audit logs append-only non-recursive persistence verified');
 
-    console.log('Test 8: User accounts deferred boundary check');
+    console.log('Test 8: User accounts creation & validation check');
     state.editingId = null;
     let toastMsg = '';
+    const originalShowToast = win.showToast;
     sandbox.showToast = (msg, type) => { toastMsg = msg; };
+    win.showToast = (msg, type) => { toastMsg = msg; };
+
+    // Validation when username is empty
+    mockElements['field_username'].value = '';
     await win.processUsersMasterSave();
-    assert.ok(toastMsg.includes('DEFERRED — SUPABASE AUTH ADMIN BOUNDARY'), 'Direct user password creation blocked at boundary');
-    console.log('✓ Test 8: User accounts boundary correctly deferred');
+    assert.ok(toastMsg.includes('Username is required'), 'Username required validation enforced');
+
+    // Create valid user
+    mockElements['field_username'].value = 'test_operator';
+    mockElements['field_password'].value = 'Test@12345';
+    mockElements['field_empId'].value = 'EMP-1';
+    mockElements['field_roleId'].value = 'ROLE-OPERATOR';
+    mockElements['field_companyId'].value = 'COMP-1';
+    mockElements['field_status'].value = 'Active';
+
+    await win.processUsersMasterSave();
+    assert.ok(toastMsg.includes('created successfully'), 'User created successfully without being blocked');
+    const created = state.data.usersMaster.find(u => u.username === 'test_operator');
+    assert.ok(created, 'Created user saved in state.data.usersMaster');
+    assert.strictEqual(created.roleId, 'ROLE-OPERATOR');
+    console.log('✓ Test 8: User accounts creation & validation verified');
 
     console.log('Test 9: Sensitive entity deletion protection');
     toastMsg = '';
@@ -508,6 +529,46 @@ async function runTests() {
     assert.ok(secAudit, 'Audit log created');
     assert.strictEqual(secAudit.payload.after_state.password, '******', 'Password redacted in audit payload');
     console.log('✓ Test 13: Audit log password redaction verified');
+
+    console.log('Test 14: High-visibility Toast placement & styling');
+    mockDocument.body.children = [];
+    originalShowToast('Test Toast Notification', 'error');
+    assert.strictEqual(mockDocument.body.children.length, 1, 'Toast element appended to body');
+    const toastElem = mockDocument.body.children[0];
+    assert.strictEqual(toastElem.style.position, 'fixed', 'Toast is fixed');
+    assert.strictEqual(toastElem.style.top, '24px', 'Toast anchored at top: 24px');
+    assert.strictEqual(toastElem.style.right, '24px', 'Toast anchored at right: 24px');
+    assert.strictEqual(toastElem.style.zIndex, '999999', 'Toast has top z-index: 999999');
+    assert.strictEqual(toastElem.style.backgroundColor, '#dc2626', 'Error toast has high-contrast crimson background');
+    assert.ok(toastElem.className.includes('erp-toast-box'), 'Toast has erp-toast-box class');
+    console.log('✓ Test 14: Toast notification top-right placement and high-contrast styles verified');
+
+    console.log('Test 15: User accounts edit and sync');
+    const targetUserId = state.data.usersMaster[0].id;
+    state.editingId = targetUserId;
+    mockElements['field_username'].value = 'live_user';
+    mockElements['field_status'].value = 'Suspended';
+    mockElements['field_empId'].value = 'EMP-1';
+    mockElements['field_roleId'].value = 'ROLE-SUPERVISOR';
+    mockElements['field_companyId'].value = 'COMP-1';
+    await win.processUsersMasterSave();
+    const editedUser = state.data.usersMaster.find(u => u.id === targetUserId);
+    assert.ok(editedUser, 'Edited user found');
+    assert.strictEqual(editedUser.status, 'Suspended', 'User account status updated');
+    console.log('✓ Test 15: User account editing and state synchronization verified');
+
+    console.log('Test 16: User accounts deletion protection');
+    state.currentUser = { id: 'admin-id', username: 'admin' };
+    state.data.usersMaster.push({ id: 'admin-id', username: 'admin' });
+    toastMsg = '';
+    await win.deleteRecord('usersMaster', 'admin-id');
+    assert.ok(toastMsg.includes('cannot delete the currently logged-in account'), 'Protected logged in account from deletion');
+
+    toastMsg = '';
+    await win.deleteRecord('usersMaster', targetUserId);
+    assert.ok(toastMsg.includes('deleted successfully'), 'Non-logged in user deleted');
+    assert.strictEqual(state.data.usersMaster.find(u => u.id === targetUserId), undefined, 'User removed from list');
+    console.log('✓ Test 16: User accounts deletion protection verified');
 
     console.log('\n======================================================');
     console.log('ALL WAVE 12.1 SANDBOX TESTS PASSED SUCCESSFULLY!');

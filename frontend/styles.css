@@ -451,3 +451,51 @@ table td {
     font-weight: 600 !important;
     margin-bottom: 16px !important;
 }
+
+/* ERP Dynamic Toast Notification System (Prominent Top-Right Placement) */
+.erp-toast-box {
+    position: fixed !important;
+    top: 24px !important;
+    right: 24px !important;
+    z-index: 999999 !important;
+    min-width: 320px !important;
+    max-width: 480px !important;
+    border-radius: 10px !important;
+    padding: 14px 18px !important;
+    display: flex !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    pointer-events: auto !important;
+    box-shadow: 0 14px 35px -4px rgba(0, 0, 0, 0.4), 0 8px 16px -4px rgba(0, 0, 0, 0.25) !important;
+    transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.erp-toast-error {
+    background-color: #dc2626 !important;
+    border: 1.5px solid #b91c1c !important;
+    color: #ffffff !important;
+    box-shadow: 0 14px 35px -4px rgba(220, 38, 38, 0.5), 0 8px 16px -4px rgba(0, 0, 0, 0.3) !important;
+}
+
+.erp-toast-warning {
+    background-color: #d97706 !important;
+    border: 1.5px solid #b45309 !important;
+    color: #ffffff !important;
+    box-shadow: 0 14px 35px -4px rgba(217, 119, 6, 0.45), 0 8px 16px -4px rgba(0, 0, 0, 0.25) !important;
+}
+
+.erp-toast-success {
+    background-color: #059669 !important;
+    border: 1.5px solid #047857 !important;
+    color: #ffffff !important;
+    box-shadow: 0 14px 35px -4px rgba(5, 150, 105, 0.45), 0 8px 16px -4px rgba(0, 0, 0, 0.25) !important;
+}
+
+.erp-toast-info {
+    background-color: #1e293b !important;
+    border: 1.5px solid #334155 !important;
+    color: #ffffff !important;
+}
+

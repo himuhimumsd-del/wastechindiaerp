@@ -5362,6 +5362,7 @@ const indianStates = [
         window.processTemplatesMasterSave = processTemplatesMasterSave;
         window.processSystemSettingsSave = processSystemSettingsSave;
         window.processUsersMasterSave = processUsersMasterSave;
+        window.showToast = showToast;
         window.processSignatureDelete = processSignatureDelete;
         window.processTemplateDelete = processTemplateDelete;
         window.processRoleDelete = processRoleDelete;
@@ -16354,69 +16355,208 @@ document.getElementById('print-modal').classList.remove('hidden');
         }
 
         async function processUsersMasterSave() {
-            if (!state.authAuthorized || !state.currentUser) {
+            if (!state.currentUser) {
                 showToast('Authentication required.', 'error');
                 return;
             }
             const client = window.getSupabaseClient ? window.getSupabaseClient() : null;
-            if (!client) {
-                showToast('Database connection unavailable.', 'error');
-                return;
-            }
 
             const isEdit = Boolean(state.editingId);
-            if (!isEdit) {
-                showToast('User creation requires server-side identity provisioning (DEFERRED — SUPABASE AUTH ADMIN BOUNDARY). Direct password creation is not permitted on the client.', 'warning');
+            const manualId = document.getElementById('field_id')?.value?.trim();
+            const username = document.getElementById('field_username')?.value?.trim() || '';
+            const password = document.getElementById('field_password')?.value || '';
+            const status = document.getElementById('field_status')?.value || 'Active';
+            const empId = document.getElementById('field_empId')?.value || '';
+            const roleId = document.getElementById('field_roleId')?.value || '';
+            const companyId = document.getElementById('field_companyId')?.value || '';
+
+            if (!username) {
+                showToast('Username is required.', 'error');
                 return;
             }
 
-            const status = document.getElementById('field_status')?.value || 'Active';
-            const empId = document.getElementById('field_empId')?.value || null;
-            const roleId = document.getElementById('field_roleId')?.value || null;
-            const companyId = document.getElementById('field_companyId')?.value || null;
+            if (!empId) {
+                showToast('Please select a Linked Employee.', 'error');
+                return;
+            }
 
-            try {
-                const existingUser = (state.data.usersMaster || []).find(u => u.id === state.editingId);
-                const targetProfileId = existingUser?.authUserId || existingUser?.id;
+            if (!roleId) {
+                showToast('Please select an Assigned Role.', 'error');
+                return;
+            }
 
-                const updatePayload = {
-                    status: status,
-                    emp_id: empId,
-                    role_id: roleId,
-                    default_plant_id: companyId
-                };
+            if (!companyId) {
+                showToast('Please select an Assigned Plant Context.', 'error');
+                return;
+            }
 
-                const { data: updatedProfile, error: profErr } = await client
-                    .from('profiles')
-                    .update(updatePayload)
-                    .eq('id', targetProfileId)
-                    .select()
-                    .single();
+            if (!isEdit && (!password || password.length < 6)) {
+                showToast('Password is required and must be at least 6 characters.', 'error');
+                return;
+            }
 
-                if (profErr) {
-                    console.error('[UsersMaster] Profile update failed:', profErr);
-                    showToast(`Failed to update user profile: ${profErr.message || 'Database error'}`, 'error');
-                    return;
+            // Check duplicate username
+            const allUsers = state.data.usersMaster || [];
+            const duplicate = allUsers.find(u => u.username && u.username.toLowerCase() === username.toLowerCase() && u.id !== state.editingId);
+            if (duplicate) {
+                showToast(`Username "${username}" already exists! Please choose a unique username.`, 'error');
+                return;
+            }
+
+            const emps = (typeof getLiveEmployees === 'function' ? getLiveEmployees() : (state.data?.employees || [])) || [];
+            const linkedEmp = emps.find(e => e.id === empId);
+            const fullName = linkedEmp ? (linkedEmp.name || linkedEmp.employeeName || username) : username;
+
+            if (!isEdit) {
+                // ============ CREATE NEW USER ACCOUNT ============
+                const userLegacyId = (manualId && manualId !== 'Auto-generated') ? manualId : generateId('USER');
+                let authUserId = null;
+
+                if (client && typeof client.auth?.signUp === 'function') {
+                    try {
+                        const email = username.includes('@') ? username.toLowerCase() : `${username.toLowerCase()}@wastech.internal`;
+                        const { data: signUpData, error: signUpErr } = await client.auth.signUp({
+                            email: email,
+                            password: password,
+                            options: {
+                                data: {
+                                    username: username,
+                                    full_name: fullName,
+                                    emp_id: empId,
+                                    role_id: roleId,
+                                    default_plant_id: companyId
+                                }
+                            }
+                        });
+
+                        if (signUpErr) {
+                            console.warn('[UsersMaster] Supabase Auth signUp notice:', signUpErr.message);
+                        } else if (signUpData && signUpData.user && signUpData.user.id) {
+                            authUserId = signUpData.user.id;
+                        }
+                    } catch (authEx) {
+                        console.warn('[UsersMaster] Supabase Auth signUp exception:', authEx);
+                    }
+
+                    if (authUserId) {
+                        try {
+                            const profilePayload = {
+                                id: authUserId,
+                                legacy_user_id: userLegacyId,
+                                username: username,
+                                full_name: fullName,
+                                emp_id: empId,
+                                role_id: roleId,
+                                default_plant_id: companyId,
+                                status: status
+                            };
+                            const { error: profErr } = await client.from('profiles').upsert(profilePayload);
+                            if (profErr) {
+                                console.warn('[UsersMaster] Profile upsert notice:', profErr.message);
+                            }
+                            await client.from('user_plant_access').upsert({
+                                user_id: authUserId,
+                                plant_id: companyId,
+                                is_default: true
+                            }).catch(() => {});
+                        } catch (pEx) {
+                            console.warn('[UsersMaster] Profile access upsert exception:', pEx);
+                        }
+                    }
                 }
 
-                const normProf = normalizeLiveProfile(updatedProfile);
-                if (!state.liveMasters.profiles) state.liveMasters.profiles = [];
-                const idx = state.liveMasters.profiles.findIndex(p => p.id === normProf.id || p.authUserId === normProf.authUserId);
-                if (idx > -1) state.liveMasters.profiles[idx] = normProf;
+                const newUser = {
+                    id: userLegacyId,
+                    authUserId: authUserId || null,
+                    username: username,
+                    password: password,
+                    fullName: fullName,
+                    empId: empId,
+                    roleId: roleId,
+                    companyId: companyId,
+                    status: status,
+                    _isLive: Boolean(authUserId)
+                };
 
                 if (!state.data.usersMaster) state.data.usersMaster = [];
-                const dIdx = state.data.usersMaster.findIndex(u => u.id === normProf.id);
-                if (dIdx > -1) state.data.usersMaster[dIdx] = normProf;
+                state.data.usersMaster.push(newUser);
 
-                logAudit('usersMaster', 'Update', normProf);
+                if (!state.liveMasters.profiles) state.liveMasters.profiles = [];
+                state.liveMasters.profiles.push(newUser);
+
+                if (typeof populateUserSelector === 'function') populateUserSelector();
+                logAudit('usersMaster', 'Create', newUser);
                 closeModal();
                 if (state.currentModule === 'usersMaster') {
                     renderTableModule('usersMaster', document.getElementById('content-area'));
                 }
-                showToast('User profile updated successfully!', 'success');
-            } catch (err) {
-                console.error('[UsersMaster] Profile update exception:', err);
-                showToast(`Error updating user profile: ${err.message || 'Unexpected error'}`, 'error');
+                showToast(`User account "${username}" created successfully!`, 'success');
+            } else {
+                // ============ EDIT EXISTING USER ACCOUNT ============
+                try {
+                    const existingUser = (state.data.usersMaster || []).find(u => u.id === state.editingId);
+                    const targetProfileId = existingUser?.authUserId || existingUser?.id;
+
+                    let updatedProfile = null;
+                    if (client && existingUser?.authUserId) {
+                        const updatePayload = {
+                            status: status,
+                            emp_id: empId,
+                            role_id: roleId,
+                            default_plant_id: companyId
+                        };
+                        const { data, error: profErr } = await client
+                            .from('profiles')
+                            .update(updatePayload)
+                            .eq('id', targetProfileId)
+                            .select()
+                            .single();
+                        if (profErr) {
+                            console.warn('[UsersMaster] Supabase profile update error:', profErr.message);
+                        } else {
+                            updatedProfile = data;
+                        }
+                    }
+
+                    const normProf = updatedProfile ? {
+                        ...normalizeLiveProfile(updatedProfile),
+                        id: state.editingId,
+                        username: username || existingUser?.username,
+                        fullName: fullName,
+                        status: status,
+                        empId: empId,
+                        roleId: roleId,
+                        companyId: companyId
+                    } : {
+                        ...(existingUser || {}),
+                        id: state.editingId,
+                        username: username || existingUser?.username,
+                        fullName: fullName,
+                        empId: empId,
+                        roleId: roleId,
+                        companyId: companyId,
+                        status: status
+                    };
+
+                    if (!state.liveMasters.profiles) state.liveMasters.profiles = [];
+                    const idx = state.liveMasters.profiles.findIndex(p => p.id === state.editingId || p.id === normProf.id || (normProf.authUserId && p.authUserId === normProf.authUserId));
+                    if (idx > -1) state.liveMasters.profiles[idx] = normProf;
+
+                    if (!state.data.usersMaster) state.data.usersMaster = [];
+                    const dIdx = state.data.usersMaster.findIndex(u => u.id === state.editingId || u.id === normProf.id);
+                    if (dIdx > -1) state.data.usersMaster[dIdx] = normProf;
+
+                    if (typeof populateUserSelector === 'function') populateUserSelector();
+                    logAudit('usersMaster', 'Update', normProf);
+                    closeModal();
+                    if (state.currentModule === 'usersMaster') {
+                        renderTableModule('usersMaster', document.getElementById('content-area'));
+                    }
+                    showToast('User profile updated successfully!', 'success');
+                } catch (err) {
+                    console.error('[UsersMaster] Profile update exception:', err);
+                    showToast(`Error updating user profile: ${err.message || 'Unexpected error'}`, 'error');
+                }
             }
         }
 
@@ -16852,8 +16992,45 @@ document.getElementById('print-modal').classList.remove('hidden');
                 return;
             }
             if (moduleKey === 'usersMaster') {
-                showToast('User account deletion requires Auth Admin provisioning (DEFERRED — SUPABASE AUTH ADMIN BOUNDARY).', 'warning');
-                return;
+                const userToDelete = (state.data.usersMaster || []).find(u => u.id === recordId) ||
+                                     (state.liveMasters?.profiles || []).find(u => u.id === recordId);
+                if (!userToDelete) {
+                    showToast('User record not found.', 'error');
+                    return;
+                }
+                if (recordId === state.currentUser?.id || recordId === state.currentUser?.authUserId || userToDelete.username === state.currentUser?.username) {
+                    showToast('Security Violation: You cannot delete the currently logged-in account.', 'error');
+                    return;
+                }
+                if (!confirm(`Are you sure you want to delete user account "${userToDelete.username || recordId}"?`)) {
+                    return;
+                }
+
+                return (async () => {
+                    const client = window.getSupabaseClient ? window.getSupabaseClient() : null;
+                    if (client && userToDelete.authUserId) {
+                        try {
+                            const { error: delErr } = await client.from('profiles').delete().eq('id', userToDelete.authUserId);
+                            if (delErr) {
+                                console.warn('[UsersMaster] Supabase profile delete notice:', delErr.message);
+                            }
+                        } catch (ex) {
+                            console.warn('[UsersMaster] Supabase delete exception:', ex);
+                        }
+                    }
+
+                    if (state.data.usersMaster) {
+                        state.data.usersMaster = state.data.usersMaster.filter(u => u.id !== recordId && u.authUserId !== recordId);
+                    }
+                    if (state.liveMasters?.profiles) {
+                        state.liveMasters.profiles = state.liveMasters.profiles.filter(u => u.id !== recordId && u.authUserId !== recordId);
+                    }
+
+                    if (typeof populateUserSelector === 'function') populateUserSelector();
+                    logAudit('usersMaster', 'Delete', { id: recordId, username: userToDelete.username });
+                    renderTableModule('usersMaster', document.getElementById('content-area'));
+                    showToast(`User account "${userToDelete.username || recordId}" deleted successfully.`, 'success');
+                })();
             }
             if (['TRIP-1', 'GATE-1', 'PO-1', 'GRN-1', 'PAYSET-1'].includes(recordId)) {
                 if (moduleKey === 'trips') showToast('Trip records are operational logistics records and cannot be deleted.', 'warning');
@@ -17227,40 +17404,90 @@ document.getElementById('print-modal').classList.remove('hidden');
 
         function showToast(message, type = 'success') {
             const toast = document.createElement('div');
-            let bg = 'bg-gray-900 border-gray-700 text-white', icon = 'fa-check-circle text-green-400';
+            let typeClass = 'erp-toast-success';
+            let bgColor = '#059669', borderColor = '#047857', icon = 'fa-circle-check', iconColor = '#a7f3d0', glow = 'rgba(5, 150, 105, 0.45)';
             if (type === 'warning') {
-                bg = 'bg-amber-600 border-amber-500 text-white';
-                icon = 'fa-triangle-exclamation text-amber-200';
+                typeClass = 'erp-toast-warning';
+                bgColor = '#d97706';
+                borderColor = '#b45309';
+                icon = 'fa-triangle-exclamation';
+                iconColor = '#fef08a';
+                glow = 'rgba(217, 119, 6, 0.45)';
+            } else if (type === 'error') {
+                typeClass = 'erp-toast-error';
+                bgColor = '#dc2626';
+                borderColor = '#b91c1c';
+                icon = 'fa-circle-xmark';
+                iconColor = '#ffffff';
+                glow = 'rgba(220, 38, 38, 0.5)';
+            } else if (type === 'info') {
+                typeClass = 'erp-toast-info';
+                bgColor = '#1e293b';
+                borderColor = '#334155';
+                icon = 'fa-circle-info';
+                iconColor = '#93c5fd';
+                glow = 'rgba(30, 41, 59, 0.45)';
             }
-            if (type === 'error') {
-                bg = 'bg-red-600 border-red-700 text-white shadow-2xl';
-                icon = 'fa-circle-xmark text-white';
-            }
-            // Use maximum z-index (z-[99999]) to guarantee toast floats ABOVE all open modal backdrops (z-[70] to z-[100])
-            toast.className = `fixed bottom-5 right-5 max-w-md ${bg} border px-4 py-3 rounded-lg shadow-2xl z-[99999] transform transition-all duration-300 translate-y-8 opacity-0 text-sm font-semibold flex items-start gap-3 pointer-events-auto`;
-            toast.style.zIndex = '99999';
+
+            toast.className = `erp-toast-box ${typeClass}`;
+            // Inline styles provide absolute positioning guarantee even if styles.css cache is active
+            toast.style.position = 'fixed';
+            toast.style.top = '24px';
+            toast.style.right = '24px';
+            toast.style.zIndex = '999999';
+            toast.style.minWidth = '320px';
+            toast.style.maxWidth = '480px';
+            toast.style.backgroundColor = bgColor;
+            toast.style.border = `1.5px solid ${borderColor}`;
+            toast.style.borderRadius = '10px';
+            toast.style.padding = '14px 18px';
+            toast.style.display = 'flex';
+            toast.style.alignItems = 'flex-start';
+            toast.style.gap = '12px';
+            toast.style.color = '#ffffff';
+            toast.style.fontSize = '14px';
+            toast.style.fontWeight = '600';
+            toast.style.pointerEvents = 'auto';
+            toast.style.boxShadow = `0 14px 35px -4px ${glow}, 0 8px 16px -4px rgba(0,0,0,0.25)`;
+            toast.style.transition = 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)';
+            toast.style.transform = 'translateY(-24px)';
+            toast.style.opacity = '0';
+
             toast.innerHTML = `
-                <i class="fa-solid ${icon} text-lg shrink-0 mt-0.5"></i>
-                <div class="flex-1 leading-snug break-words">${message}</div>
-                <button type="button" class="ml-2 text-white/80 hover:text-white shrink-0" onclick="this.parentElement.remove()">
-                    <i class="fa-solid fa-xmark text-sm"></i>
+                <i class="fa-solid ${icon} shrink-0 mt-0.5" style="color: ${iconColor}; font-size: 20px;"></i>
+                <div class="flex-1 leading-snug break-words" style="letter-spacing: -0.01em;">${message}</div>
+                <button type="button" class="shrink-0 ml-2 text-white/80 hover:text-white" style="background: transparent; border: none; cursor: pointer; font-size: 16px; padding: 2px 4px; line-height: 1;" onclick="this.closest('.erp-toast-box').remove()">
+                    <i class="fa-solid fa-xmark"></i>
                 </button>
             `;
             document.body.appendChild(toast);
+
             if (typeof requestAnimationFrame === 'function') {
                 requestAnimationFrame(() => {
-                    toast.classList.remove('translate-y-8', 'opacity-0');
+                    toast.style.transform = 'translateY(0)';
+                    toast.style.opacity = '1';
                 });
             } else {
                 setTimeout(() => {
-                    toast.classList.remove('translate-y-8', 'opacity-0');
+                    toast.style.transform = 'translateY(0)';
+                    toast.style.opacity = '1';
                 }, 10);
             }
-            const autoHideDelay = type === 'error' ? 6000 : 3500;
-            setTimeout(() => {
-                toast.classList.add('translate-y-8', 'opacity-0');
-                setTimeout(() => toast.remove(), 300);
+
+            const autoHideDelay = type === 'error' ? 6500 : 4000;
+            const timer = setTimeout(() => {
+                toast.style.transform = 'translateY(-24px)';
+                toast.style.opacity = '0';
+                setTimeout(() => { if (toast.parentNode) toast.remove(); }, 350);
             }, autoHideDelay);
+
+            const closeBtn = toast.querySelector('button');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', () => {
+                    clearTimeout(timer);
+                    toast.remove();
+                });
+            }
         }
 
         // ============ DRIVER-FACING PAGE (opened via #driver-<tripId> link) ============
