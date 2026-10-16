@@ -8119,7 +8119,8 @@ document.getElementById('print-modal').classList.remove('hidden');
                             <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
                             <input type="text" onkeyup="filterTableRows(this.value, 'module-tbody')" placeholder="Search records..." class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:border-erp-main">
                         </div>
-                        <div class="flex gap-2">
+                        <div class="flex gap-2 items-center">
+                            <button id="bulkDeleteBtn" onclick="deleteSelectedRecords('${moduleKey}')" class="hidden px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium shadow-sm transition-all flex items-center gap-2"><i class="fa-solid fa-trash"></i> Delete Selected (<span id="selectedCountText">0</span>)</button>
                             ${specialActions}
                             ${canAdd ? `<button onclick="openModal('${moduleKey}')" class="px-4 py-2 bg-erp-main text-white rounded-lg text-sm font-medium hover:bg-erp-hover shadow-sm transition-colors flex items-center gap-2"><i class="fa-solid fa-plus"></i> Add New</button>` : ''}
                         </div>
@@ -8129,6 +8130,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                         <table class="w-full text-left border-collapse">
                             <thead class="sticky top-0 bg-gray-100 z-10 shadow-sm text-gray-600 text-xs uppercase tracking-wider">
                                 <tr>
+                                    <th class="px-3 py-4 w-12 text-center border-b border-gray-200"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAllRows(this.checked, '${moduleKey}')" class="rounded border-gray-300 text-erp-main focus:ring-erp-main cursor-pointer h-4 w-4" title="Select All"></th>
                                     ${config.schema.filter(col => !col.hideInTable).map(col => `<th class="px-6 py-4 font-bold border-b border-gray-200 whitespace-nowrap">${col.label}</th>`).join('')}
                                     <th class="px-6 py-4 font-bold border-b border-gray-200 text-right whitespace-nowrap">Actions</th>
                                 </tr>
@@ -8151,6 +8153,7 @@ document.getElementById('print-modal').classList.remove('hidden');
             
             return dataList.map((row) => {
                 let rowHtml = `<tr class="hover:bg-erp-light transition-colors group">`;
+                rowHtml += `<td class="px-3 py-3 w-12 text-center"><input type="checkbox" class="row-select-checkbox rounded border-gray-300 text-erp-main focus:ring-erp-main cursor-pointer h-4 w-4" data-id="${row.id}" onchange="updateSelectedCount('${moduleKey}')"></td>`;
                 config.schema.forEach(col => {
                     if(col.hideInTable) return; 
                     let val = (row[col.key] !== undefined && row[col.key] !== null && row[col.key] !== '') ? row[col.key] : '-';
@@ -17327,6 +17330,203 @@ document.getElementById('print-modal').classList.remove('hidden');
                 showToast('Record deleted.', 'warning');
             }
         }
+
+        // --- BULK SELECTION & MULTI-RECORD DELETION ---
+        function toggleSelectAllRows(isChecked, moduleKey) {
+            const tbody = document.getElementById('module-tbody');
+            if (!tbody) return;
+            const checkboxes = tbody.querySelectorAll('.row-select-checkbox');
+            checkboxes.forEach(cb => {
+                const tr = cb.closest('tr');
+                if (!tr || tr.style.display !== 'none') {
+                    cb.checked = isChecked;
+                }
+            });
+            updateSelectedCount(moduleKey);
+        }
+
+        function updateSelectedCount(moduleKey) {
+            const tbody = document.getElementById('module-tbody');
+            if (!tbody) return;
+            const allCheckboxes = Array.from(tbody.querySelectorAll('.row-select-checkbox')).filter(cb => {
+                const tr = cb.closest('tr');
+                return !tr || tr.style.display !== 'none';
+            });
+            const checkedBoxes = allCheckboxes.filter(cb => cb.checked);
+            const count = checkedBoxes.length;
+
+            const bulkBtn = document.getElementById('bulkDeleteBtn');
+            const countSpan = document.getElementById('selectedCountText');
+            if (countSpan) countSpan.innerText = count;
+
+            if (bulkBtn) {
+                if (count > 0) bulkBtn.classList.remove('hidden');
+                else bulkBtn.classList.add('hidden');
+            }
+
+            const selectAllCb = document.getElementById('selectAllCheckbox');
+            if (selectAllCb) {
+                selectAllCb.checked = allCheckboxes.length > 0 && count === allCheckboxes.length;
+                selectAllCb.indeterminate = count > 0 && count < allCheckboxes.length;
+            }
+        }
+
+        async function deleteSelectedRecords(moduleKey) {
+            if (!state.authAuthorized || !state.currentUser) {
+                showToast('Authentication required to delete records.', 'error');
+                return;
+            }
+            if (typeof hasPerm === 'function' && !hasPerm(moduleKey, 'delete')) {
+                showToast('Unauthorized: You do not have permission to delete records in this module.', 'error');
+                return;
+            }
+
+            const tbody = document.getElementById('module-tbody');
+            if (!tbody) return;
+            const selectedBoxes = Array.from(tbody.querySelectorAll('.row-select-checkbox:checked'));
+            const selectedIds = selectedBoxes.map(cb => cb.getAttribute('data-id')).filter(Boolean);
+
+            if (selectedIds.length === 0) {
+                showToast('Please select at least one record to delete.', 'warning');
+                return;
+            }
+
+            const config = modulesConfig[moduleKey];
+            const title = config ? config.title : moduleKey;
+
+            // Security guard for usersMaster: cannot delete current user
+            if (moduleKey === 'usersMaster') {
+                const currId = state.currentUser?.id;
+                const currAuth = state.currentUser?.authUserId;
+                const currUser = state.currentUser?.username;
+                const hasSelf = selectedIds.some(id => id === currId || id === currAuth || id === currUser);
+                if (hasSelf) {
+                    showToast('Security Violation: You cannot delete your currently logged-in user account.', 'error');
+                    return;
+                }
+            }
+
+            if (!confirm(`Are you sure you want to delete ${selectedIds.length} selected record(s) from ${title}? This action cannot be undone.`)) {
+                return;
+            }
+
+            const client = window.getSupabaseClient ? window.getSupabaseClient() : null;
+            let successCount = 0;
+            let errorCount = 0;
+
+            showToast(`Deleting ${selectedIds.length} record(s)...`, 'info');
+
+            for (const recordId of selectedIds) {
+                try {
+                    if (moduleKey === 'usersMaster') {
+                        const userToDelete = (state.data.usersMaster || []).find(u => u.id === recordId) || (state.liveMasters?.profiles || []).find(u => u.id === recordId);
+                        if (client && userToDelete?.authUserId) {
+                            try { await client.from('profiles').delete().eq('id', userToDelete.authUserId); } catch (_) {}
+                        }
+                    } else if (moduleKey === 'poReceived' || moduleKey === 'poIssued') {
+                        if (client) {
+                            const rec = ((state.data && state.data[moduleKey]) || []).find(r => r.id === recordId) ||
+                                        ((state.liveMasters && state.liveMasters[moduleKey]) || []).find(r => r.id === recordId);
+                            const dbId = rec?.dbId || (isUUID(recordId) ? recordId : null);
+                            if (dbId) await client.from('orders').delete().eq('id', dbId);
+                            else await client.from('orders').delete().eq('po_number', recordId);
+                        }
+                    } else if (moduleKey === 'trips') {
+                        if (client) {
+                            const rec = ((state.data && state.data.trips) || []).find(r => r.id === recordId) ||
+                                        ((state.liveMasters && state.liveMasters.trips) || []).find(r => r.id === recordId);
+                            const dbId = rec?.dbId || (isUUID(recordId) ? recordId : null);
+                            if (dbId) await client.from('trips').delete().eq('id', dbId);
+                            else await client.from('trips').delete().eq('trip_number', recordId);
+                        }
+                    } else if (moduleKey === 'grn') {
+                        if (client) {
+                            const rec = ((state.data && state.data.grn) || []).find(r => r.id === recordId);
+                            const dbId = rec?.dbId || (isUUID(recordId) ? recordId : null);
+                            if (dbId) {
+                                await client.from('grn_items').delete().eq('grn_id', dbId);
+                                await client.from('grn').delete().eq('id', dbId);
+                            } else {
+                                await client.from('grn').delete().eq('grn_number', recordId);
+                            }
+                        }
+                    } else if (moduleKey === 'gateVerification') {
+                        if (client) {
+                            const rec = ((state.data && state.data.gateVerification) || []).find(r => r.id === recordId);
+                            const dbId = rec?.dbId || (isUUID(recordId) ? recordId : null);
+                            if (dbId) await client.from('gate_entries').delete().eq('id', dbId);
+                            else await client.from('gate_entries').delete().eq('entry_number', recordId);
+                        }
+                    } else if (moduleKey === 'invoices') {
+                        if (client) {
+                            const rec = ((state.data && state.data.invoices) || []).find(r => r.id === recordId);
+                            const dbId = rec?.dbId || rec?.db_id || (isUUID(recordId) ? recordId : null);
+                            if (dbId) await client.from('invoices').delete().eq('id', dbId);
+                            else await client.from('invoices').delete().eq('invoice_number', recordId);
+                        }
+                    } else if (moduleKey === 'receivedInvoice') {
+                        if (client) {
+                            const rec = ((state.data && state.data.receivedInvoice) || []).find(r => r.id === recordId);
+                            const dbId = rec?.dbId || rec?.db_id || (isUUID(recordId) ? recordId : null);
+                            if (dbId) await client.from('vendor_invoices').delete().eq('id', dbId);
+                            else await client.from('vendor_invoices').delete().eq('vendor_invoice_no', recordId);
+                        }
+                    } else if (moduleKey === 'machineLogs') {
+                        if (client) {
+                            const rec = ((state.data && state.data.machineLogs) || []).find(r => r.id === recordId);
+                            const dbId = rec?.dbId || (isUUID(recordId) ? recordId : null);
+                            if (dbId) await client.from('machine_logs').delete().eq('id', dbId);
+                        }
+                    } else if (moduleKey === 'consumableLogs') {
+                        if (client) {
+                            const rec = ((state.data && state.data.consumableLogs) || []).find(r => r.id === recordId);
+                            const dbId = rec?.dbId || (isUUID(recordId) ? recordId : null);
+                            if (dbId) await client.from('consumable_movements').delete().eq('id', dbId);
+                        }
+                    } else if (moduleKey === 'rolesMaster') {
+                        if (client) {
+                            await client.from('roles').delete().eq('id', recordId);
+                        }
+                    } else {
+                        const meta = typeof MASTER_PERSISTENCE_MAP !== 'undefined' ? MASTER_PERSISTENCE_MAP[moduleKey] : null;
+                        if (client && meta && meta.table) {
+                            await client.from(meta.table).delete().eq('id', recordId);
+                        }
+                    }
+
+                    // Remove from in-memory arrays
+                    if (state.data && Array.isArray(state.data[moduleKey])) {
+                        state.data[moduleKey] = state.data[moduleKey].filter(r => r.id !== recordId && r.dbId !== recordId && r.db_id !== recordId);
+                    }
+                    if (state.liveMasters && Array.isArray(state.liveMasters[moduleKey])) {
+                        state.liveMasters[moduleKey] = state.liveMasters[moduleKey].filter(r => r.id !== recordId && r.dbId !== recordId && r.db_id !== recordId);
+                    }
+                    if (moduleKey === 'usersMaster' && state.liveMasters?.profiles) {
+                        state.liveMasters.profiles = state.liveMasters.profiles.filter(u => u.id !== recordId && u.authUserId !== recordId);
+                    }
+
+                    successCount++;
+                } catch (delErr) {
+                    console.error(`[BulkDelete] Error deleting ${recordId}:`, delErr);
+                    errorCount++;
+                }
+            }
+
+            if (typeof logAudit === 'function') {
+                logAudit(moduleKey, 'Bulk Delete', { count: successCount, ids: selectedIds });
+            }
+
+            renderTableModule(moduleKey, document.getElementById('content-area'));
+            if (errorCount === 0) {
+                showToast(`Successfully deleted ${successCount} record(s).`, 'success');
+            } else {
+                showToast(`Deleted ${successCount} record(s); ${errorCount} failed.`, 'warning');
+            }
+        }
+
+        window.toggleSelectAllRows = toggleSelectAllRows;
+        window.updateSelectedCount = updateSelectedCount;
+        window.deleteSelectedRecords = deleteSelectedRecords;
 
         // --- 7. UTILITIES & UI HELPERS ---
         function showModalWindow() { const modal = document.getElementById('app-modal'); const modalContent = document.getElementById('modal-content'); modal.classList.remove('hidden'); setTimeout(() => { modalContent.classList.remove('scale-95', 'opacity-0'); modalContent.classList.add('scale-100', 'opacity-100'); }, 10); }
