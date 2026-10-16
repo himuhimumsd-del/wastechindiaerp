@@ -456,6 +456,8 @@ const indianStates = [
 
         const globalModules = ['companyMaster', 'rolesMaster', 'usersMaster', 'systemSettings', 'itemMaster', 'unitMaster', 'poTypeMaster', 'partiesMaster', 'payrollSettings'];
         const dummyPodSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='200' viewBox='0 0 400 200'%3E%3Crect width='400' height='200' fill='%23e2e8f0'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='16' font-weight='bold' fill='%2364748b'%3EDriver POD Uploaded%3C/text%3E%3C/svg%3E";
+        const isUUID = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+        window.isUUID = isUUID;
 
         // --- 2. STATE & DUMMY DATA ---
         let state = {
@@ -17372,14 +17374,12 @@ document.getElementById('print-modal').classList.remove('hidden');
         }
 
         async function deleteSelectedRecords(moduleKey) {
-            if (!state.authAuthorized || !state.currentUser) {
-                showToast('Authentication required to delete records.', 'error');
-                return;
-            }
             if (typeof hasPerm === 'function' && !hasPerm(moduleKey, 'delete')) {
                 showToast('Unauthorized: You do not have permission to delete records in this module.', 'error');
                 return;
             }
+
+            const isUUID = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
             const tbody = document.getElementById('module-tbody');
             if (!tbody) return;
@@ -17495,11 +17495,12 @@ document.getElementById('print-modal').classList.remove('hidden');
                     }
 
                     // Remove from in-memory arrays
+                    // Remove from in-memory arrays (matching id, dbId, or operational number)
                     if (state.data && Array.isArray(state.data[moduleKey])) {
-                        state.data[moduleKey] = state.data[moduleKey].filter(r => r.id !== recordId && r.dbId !== recordId && r.db_id !== recordId);
+                        state.data[moduleKey] = state.data[moduleKey].filter(r => r.id !== recordId && r.dbId !== recordId && r.db_id !== recordId && r.tripNumber !== recordId && r.trip_number !== recordId && r.entryNumber !== recordId && r.entry_number !== recordId);
                     }
                     if (state.liveMasters && Array.isArray(state.liveMasters[moduleKey])) {
-                        state.liveMasters[moduleKey] = state.liveMasters[moduleKey].filter(r => r.id !== recordId && r.dbId !== recordId && r.db_id !== recordId);
+                        state.liveMasters[moduleKey] = state.liveMasters[moduleKey].filter(r => r.id !== recordId && r.dbId !== recordId && r.db_id !== recordId && r.tripNumber !== recordId && r.trip_number !== recordId && r.entryNumber !== recordId && r.entry_number !== recordId);
                     }
                     if (moduleKey === 'usersMaster' && state.liveMasters?.profiles) {
                         state.liveMasters.profiles = state.liveMasters.profiles.filter(u => u.id !== recordId && u.authUserId !== recordId);
