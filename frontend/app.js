@@ -8063,6 +8063,7 @@ document.getElementById('print-modal').classList.remove('hidden');
             if (moduleKey === 'rolesMaster') return renderRoleMatrixModal(bodyEl, recordData);
             if (moduleKey === 'attendance' && !recordId) return renderLiveAttendanceModal(bodyEl);
             if (moduleKey === 'gateVerification' && !recordId) return renderGateCameraModal(bodyEl);
+            if (moduleKey === 'trips') return renderTripModal(bodyEl, recordData, recordId);
 
             let formHtml = `<form id="dynamicForm" class="grid grid-cols-1 sm:grid-cols-2 gap-4">`;
             config.schema.forEach(field => {
@@ -8549,6 +8550,434 @@ document.getElementById('print-modal').classList.remove('hidden');
                 controller.addEventListener('change', sync);
             });
         }
+
+        
+        // --- DEDICATED MODAL: TRIPS LAYOUT (TARGET WIREFRAME ALIGNED) ---
+        function renderTripModal(bodyEl, recordData, recordId) {
+            recordData = recordData || {};
+            const titleEl = document.getElementById('modal-title');
+            if (titleEl) titleEl.innerText = recordId ? 'EDIT TRIP' : 'ADD TRIP';
+
+            const parties = (typeof getLiveParties === 'function' ? getLiveParties() : (state.data.partiesMaster || []))
+                .filter(p => !p.companyId || p.companyId === state.currentCompany)
+                .filter(p => Array.isArray(p.type) ? p.type.includes('Client') : p.type === 'Client');
+            const clientOptions = parties.map(p => {
+                const optVal = p.name || p.tradeName || p.id;
+                const isSel = (recordData.client === optVal || recordData.party_id === p.id || recordData.client === p.id);
+                return `<option value="${optVal}" ${isSel ? 'selected' : ''}>${p.id} - ${optVal}</option>`;
+            }).join('');
+
+            const allPoReceived = (state.data.poReceived || []).concat((state.liveMasters && state.liveMasters.poReceived) || []);
+            const clientPOs = allPoReceived.filter(
+                po => (!recordData.client || po.party === recordData.client) && (!state.currentCompany || po.companyId === state.currentCompany) && (po.status === 'Open' || !po.status)
+            );
+            const poReceivedOptions = clientPOs.map(po => `<option value="${po.id}" ${recordData.poReceived === po.id ? 'selected' : ''}>${po.id} - ${po.itemName || po.item || 'Material'}</option>`).join('');
+            const transportPOReceivedOptions = clientPOs.map(po => `<option value="${po.id}" ${recordData.transportPOReceived === po.id ? 'selected' : ''}>${po.id} - ${po.itemName || po.item || 'Material'}</option>`).join('');
+
+            const allPoIssued = (state.data.poIssued || []).concat((state.liveMasters && state.liveMasters.poIssued) || []);
+            const vendorPOs = allPoIssued.filter(
+                po => (!state.currentCompany || po.companyId === state.currentCompany) && (po.status === 'Open' || !po.status)
+            );
+            const poIssuedOptions = vendorPOs.map(po => `<option value="${po.id}" ${recordData.poIssued === po.id ? 'selected' : ''}>${po.id} - ${po.party || 'Vendor'} (${po.itemName || po.item || 'Material'})</option>`).join('');
+            const linkedTransportPOOptions = vendorPOs.map(po => `<option value="${po.id}" ${recordData.linkedTransportPOIssued === po.id ? 'selected' : ''}>${po.id} - ${po.party || 'Vendor'} (${po.itemName || po.item || 'Material'})</option>`).join('');
+
+            const vehicles = (typeof getLiveVehicles === 'function' ? getLiveVehicles() : (state.data.vehicleMaster || []))
+                .filter(v => !v.companyId || v.companyId === state.currentCompany);
+            const vehicleOptions = vehicles.map(v => {
+                const isSel = (recordData.vehicle === v.vehicleNo || recordData.vehicle_id === v.id || recordData.vehicleNo === v.vehicleNo);
+                return `<option value="${v.vehicleNo}" ${isSel ? 'selected' : ''}>${v.vehicleNo} ${v.party ? '- ' + v.party : ''}</option>`;
+            }).join('');
+
+            const templates = (typeof getLiveTemplates === 'function' ? getLiveTemplates() : (state.data.templatesMaster || []))
+                .filter(t => !t.companyId || t.companyId === state.currentCompany);
+            const templateOptions = templates.map(t => `<option value="${t.name || t.id}" ${(recordData.tcTemplate === t.name || recordData.tcTemplate === t.id) ? 'selected' : ''}>${t.name}</option>`).join('');
+
+            const cr = recordData.consignor || {}, ce = recordData.consignee || {};
+            const addrBlock = (prefix, data) => `
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div class="sm:col-span-2"><label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Name or GSTIN</label><input type="text" id="field_${prefix}_search" list="datalist_${prefix}_search" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="Type to search a saved party..."><datalist id="datalist_${prefix}_search">${[...(typeof getLiveParties === 'function' ? getLiveParties() : (state.data.partiesMaster || [])), ...(state.data.companyMaster || [])].map(p => `<option value="${p.name || p.tradeName}">`).join('')}</datalist></div>
+                    <div><label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Name</label><input type="text" id="field_${prefix}_name" value="${data.name || ''}" class="w-full p-2 border border-gray-300 rounded text-sm"></div>
+                    <div><label class="block text-xs font-bold text-gray-600 mb-1 uppercase">GSTIN</label><input type="text" id="field_${prefix}_gstin" value="${data.gstin || ''}" class="w-full p-2 border border-gray-300 rounded text-sm"></div>
+                    <div><label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Street1</label><input type="text" id="field_${prefix}_street1" value="${data.street1 || ''}" class="w-full p-2 border border-gray-300 rounded text-sm"></div>
+                    <div><label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Street2</label><input type="text" id="field_${prefix}_street2" value="${data.street2 || ''}" class="w-full p-2 border border-gray-300 rounded text-sm"></div>
+                    <div><label class="block text-xs font-bold text-gray-600 mb-1 uppercase">City</label><input type="text" id="field_${prefix}_city" value="${data.city || ''}" class="w-full p-2 border border-gray-300 rounded text-sm"></div>
+                    <div><label class="block text-xs font-bold text-gray-600 mb-1 uppercase">District</label><input type="text" id="field_${prefix}_district" value="${data.district || ''}" class="w-full p-2 border border-gray-300 rounded text-sm"></div>
+                    <div><label class="block text-xs font-bold text-gray-600 mb-1 uppercase">State</label><input type="text" id="field_${prefix}_state" value="${data.state || ''}" class="w-full p-2 border border-gray-300 rounded text-sm"></div>
+                    <div><label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Pin</label><input type="text" id="field_${prefix}_pin" value="${data.pin || ''}" class="w-full p-2 border border-gray-300 rounded text-sm"></div>
+                </div>`;
+
+            const items = Array.isArray(recordData.items) && recordData.items.length ? recordData.items : [{ itemName: '', description: '', weight: '' }];
+            const itemOptions = (state.data.itemMaster || []).map(i => `<option value="${i.name}">${i.name}</option>`).join('');
+            const attachments = Array.isArray(recordData.attachments) && recordData.attachments.length ? recordData.attachments : [{ type: 'Weighment Slip', file: '' }];
+
+            const tripDateVal = recordData.date || (typeof getDefaultDateForActivePeriod === 'function' ? getDefaultDateForActivePeriod() : new Date().toISOString().split('T')[0]);
+
+            let formHtml = `
+            <form id="dynamicForm" class="space-y-4">
+                <input type="hidden" id="field_id" value="${recordId ? (recordData.id || '') : 'Auto-generated'}">
+                <input type="hidden" id="field_tripType" value="${recordData.tripType || 'Outward (Sales)'}">
+                <input type="hidden" id="field_driverName" value="${recordData.driverName || ''}">
+                <input type="hidden" id="field_driverPhone" value="${recordData.driverPhone || ''}">
+                <input type="hidden" id="field_status" value="${recordData.status || 'In Progress'}">
+                <input type="hidden" id="field_acceptanceStatus" value="${recordData.acceptanceStatus || 'Pending Acceptance'}">
+                <input type="hidden" id="field_lrNumber" value="${recordData.lrNumber || ''}">
+                <input type="hidden" id="field_challanNumber" value="${recordData.challanNumber || ''}">
+
+                <!-- TRIP DETAILS -->
+                <div class="border rounded-lg p-4">
+                    <h4 class="text-sm font-bold text-gray-800 mb-3 border-b pb-2 uppercase">Trip Details</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3">
+                        <!-- LEFT COLUMN -->
+                        <div class="space-y-3">
+                            <div class="field_client_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Client Name</label>
+                                <div class="flex gap-2 items-center w-full">
+                                    <div class="flex-1">
+                                        <select id="field_client" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" required>
+                                            <option value="">Select...</option>
+                                            ${clientOptions}
+                                        </select>
+                                    </div>
+                                    <button type="button" onclick="quickAddParty('field_client')" class="bg-erp-main text-white h-[38px] w-[42px] rounded hover:bg-erp-hover flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="field_poReceived_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Received PO List</label>
+                                <div class="flex gap-2 items-center w-full">
+                                    <div class="flex-1">
+                                        <select id="field_poReceived" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm">
+                                            <option value="">Select...</option>
+                                            ${poReceivedOptions}
+                                        </select>
+                                    </div>
+                                    <button type="button" onclick="quickAddPO('poReceived', 'field_poReceived')" class="bg-erp-main text-white h-[38px] w-[42px] rounded hover:bg-erp-hover flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="field_transportPOReceived_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Transport PO Received</label>
+                                <div class="flex gap-2 items-center w-full">
+                                    <div class="flex-1">
+                                        <select id="field_transportPOReceived" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm">
+                                            <option value="">Select...</option>
+                                            ${transportPOReceivedOptions}
+                                        </select>
+                                    </div>
+                                    <button type="button" onclick="quickAddPO('poReceived', 'field_transportPOReceived')" class="bg-erp-main text-white h-[38px] w-[42px] rounded hover:bg-erp-hover flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="field_poIssued_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Issued PO List</label>
+                                <div class="flex gap-2 items-center w-full">
+                                    <div class="flex-1">
+                                        <select id="field_poIssued" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm">
+                                            <option value="">Select...</option>
+                                            ${poIssuedOptions}
+                                        </select>
+                                    </div>
+                                    <button type="button" onclick="quickAddPO('poIssued', 'field_poIssued')" class="bg-erp-main text-white h-[38px] w-[42px] rounded hover:bg-erp-hover flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="field_linkedTransportPOIssued_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Linked Transport PO</label>
+                                <div class="flex gap-2 items-center w-full">
+                                    <div class="flex-1">
+                                        <select id="field_linkedTransportPOIssued" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm">
+                                            <option value="">Select...</option>
+                                            ${linkedTransportPOOptions}
+                                        </select>
+                                    </div>
+                                    <button type="button" onclick="quickAddPO('poIssued', 'field_linkedTransportPOIssued')" class="bg-erp-main text-white h-[38px] w-[42px] rounded hover:bg-erp-hover flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="field_vehicle_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Vehicle Number</label>
+                                <div class="flex gap-2 items-center w-full">
+                                    <div class="flex-1">
+                                        <select id="field_vehicle" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" required>
+                                            <option value="">Select...</option>
+                                            ${vehicleOptions}
+                                        </select>
+                                    </div>
+                                    <button type="button" onclick="quickAddVehicle('field_vehicle')" class="bg-erp-main text-white h-[38px] w-[42px] rounded hover:bg-erp-hover flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="field_transportBy_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Transport By</label>
+                                <select id="field_transportBy" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" required>
+                                    <option value="By Road" ${recordData.transportBy === 'By Road' ? 'selected' : ''}>By Road</option>
+                                    <option value="By Rail" ${recordData.transportBy === 'By Rail' ? 'selected' : ''}>By Rail</option>
+                                    <option value="By Air" ${recordData.transportBy === 'By Air' ? 'selected' : ''}>By Air</option>
+                                    <option value="By Sea" ${recordData.transportBy === 'By Sea' ? 'selected' : ''}>By Sea</option>
+                                </select>
+                            </div>
+
+                            <div class="field_taxInvoiceNumber_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Tax Invoice Number</label>
+                                <input type="text" id="field_taxInvoiceNumber" value="${recordData.taxInvoiceNumber || ''}" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm">
+                            </div>
+                        </div>
+
+                        <!-- RIGHT COLUMN -->
+                        <div class="space-y-3">
+                            <div class="field_date_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Trip Date</label>
+                                <input type="date" id="field_date" value="${tripDateVal}" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" required>
+                            </div>
+
+                            <div class="field_freightPaidBy_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Freight Paid By</label>
+                                <select id="field_freightPaidBy" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" required>
+                                    <option value="Consignor" ${recordData.freightPaidBy === 'Consignor' ? 'selected' : ''}>Consignor</option>
+                                    <option value="Consignee" ${recordData.freightPaidBy === 'Consignee' ? 'selected' : ''}>Consignee</option>
+                                    <option value="Third Party" ${recordData.freightPaidBy === 'Third Party' ? 'selected' : ''}>Third Party</option>
+                                </select>
+                            </div>
+
+                            <div class="field_billType_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Bill Type</label>
+                                <select id="field_billType" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" required>
+                                    <option value="To Pay" ${recordData.billType === 'To Pay' ? 'selected' : ''}>To Pay</option>
+                                    <option value="To Bill" ${(!recordData.billType || recordData.billType === 'To Bill') ? 'selected' : ''}>To Bill</option>
+                                    <option value="Paid" ${recordData.billType === 'Paid' ? 'selected' : ''}>Paid</option>
+                                </select>
+                            </div>
+
+                            <div class="field_insurance_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Insurance</label>
+                                <select id="field_insurance" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" required>
+                                    <option value="No" ${recordData.insurance === 'No' ? 'selected' : ''}>No</option>
+                                    <option value="Yes" ${recordData.insurance === 'Yes' ? 'selected' : ''}>Yes</option>
+                                </select>
+                            </div>
+
+                            <div class="field_insurancePolicyDetails_field_wrap" data-conditional-key="insurance" data-conditional-value="Yes" style="display:${recordData.insurance === 'Yes' ? '' : 'none'};">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Insurance Policy Details</label>
+                                <input type="text" id="field_insurancePolicyDetails" value="${recordData.insurancePolicyDetails || ''}" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm">
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="field_originCity_field_wrap">
+                                    <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Origin City</label>
+                                    <input type="text" id="field_originCity" value="${recordData.originCity || ''}" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" required>
+                                </div>
+                                <div class="field_originState_field_wrap">
+                                    <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Origin State</label>
+                                    <select id="field_originState" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" required>
+                                        <option value="">Select...</option>
+                                        ${indianStates.map(s => `<option value="${s}" ${recordData.originState === s ? 'selected' : ''}>${s}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div class="field_destinationCity_field_wrap">
+                                    <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Destination City</label>
+                                    <input type="text" id="field_destinationCity" value="${recordData.destinationCity || ''}" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" required>
+                                </div>
+                                <div class="field_destinationState_field_wrap">
+                                    <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Destination State</label>
+                                    <select id="field_destinationState" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" required>
+                                        <option value="">Select...</option>
+                                        ${indianStates.map(s => `<option value="${s}" ${recordData.destinationState === s ? 'selected' : ''}>${s}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="field_ewbNumber_field_wrap">
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">EWB Number</label>
+                                <input type="text" id="field_ewbNumber" value="${recordData.ewbNumber || ''}" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FILL CONSIGNOR AND CONSIGNEE ADDRESS -->
+                <div class="border rounded-lg p-3 bg-gray-50">
+                    <label class="flex items-center gap-2 cursor-pointer font-bold text-sm text-gray-700 select-none">
+                        <input type="checkbox" id="field_separateConsignorConsignee" class="w-4 h-4 accent-erp-main" ${recordData.separateConsignorConsignee ? 'checked' : ''}>
+                        Fill Consignor and Consignee Address
+                    </label>
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-3" id="consignor-consignee-container" style="display:${recordData.separateConsignorConsignee ? 'grid' : 'none'};">
+                        <div class="border rounded-lg p-4 bg-white"><h4 class="text-sm font-bold text-gray-800 mb-3 border-b pb-2">Consignor's Name and Address</h4>${addrBlock('consignor', cr)}</div>
+                        <div class="border rounded-lg p-4 bg-white"><h4 class="text-sm font-bold text-gray-800 mb-3 border-b pb-2">Consignee's Name and Address</h4>${addrBlock('consignee', ce)}</div>
+                    </div>
+                </div>
+
+                <!-- ITEM DETAILS -->
+                <div class="border rounded-lg p-4" id="trip-items-wrap">
+                    <div class="flex justify-between items-center mb-3 border-b pb-2">
+                        <h4 class="text-sm font-bold text-gray-800 uppercase">Item Details</h4>
+                        <button type="button" onclick="addTripItemRow()" class="text-erp-main text-xs font-bold flex items-center gap-1 hover:underline">
+                            <i class="fa-solid fa-plus"></i> Add
+                        </button>
+                    </div>
+                    <div class="hidden sm:grid grid-cols-12 gap-2 mb-1 text-[11px] font-bold text-gray-500 uppercase px-1">
+                        <span class="col-span-1">S.No.</span>
+                        <span class="col-span-4">Item Name</span>
+                        <span class="col-span-4">Description</span>
+                        <span class="col-span-2">Weight (MT)</span>
+                        <span class="col-span-1"></span>
+                    </div>
+                    <div id="trip-items-body">
+                        ${items.map((it, idx) => `
+                            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-2 trip-item-row items-center border-b sm:border-b-0 pb-2 sm:pb-0">
+                                <span class="col-span-1 text-xs text-gray-500 font-bold sm:font-normal">${idx + 1}.</span>
+                                <select class="col-span-1 sm:col-span-4 trip-item-name p-1.5 border border-gray-200 rounded text-sm"><option value="">Select...</option>${itemOptions.replace(`value="${it.itemName}"`, `value="${it.itemName}" selected`)}</select>
+                                <input type="text" class="col-span-1 sm:col-span-4 trip-item-desc p-1.5 border border-gray-200 rounded text-sm" placeholder="Description" value="${it.description || ''}">
+                                <input type="number" step="0.01" class="col-span-1 sm:col-span-2 trip-item-weight p-1.5 border border-gray-200 rounded text-sm" placeholder="Weight(MT)" value="${it.weight || ''}">
+                                <button type="button" class="col-span-1 text-red-500 hover:text-red-700 py-1 text-left sm:text-center" onclick="this.closest('.trip-item-row').remove()"><i class="fa-solid fa-xmark"></i></button>
+                            </div>`).join('')}
+                    </div>
+                </div>
+
+                <!-- TRANSPORTATION CHARGE -->
+                <div class="border rounded-lg p-4">
+                    <h4 class="text-sm font-bold text-gray-800 mb-3 border-b pb-2 uppercase">Transportation Charge</h4>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Client Transportation Charge</label>
+                            <input type="number" step="0.01" id="field_clientTransportationCharge" value="${recordData.clientTransportationCharge || ''}" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" placeholder="0.00">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Transporter Transportation Charge</label>
+                            <input type="number" step="0.01" id="field_transporterTransportationCharge" value="${recordData.transporterTransportationCharge || ''}" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm" placeholder="0.00">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ATTACHMENTS & TERMS & CONDITIONS -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <!-- ATTACHMENTS [+] -->
+                    <div class="border rounded-lg p-4" id="trip-attachments-wrap">
+                        <div class="flex justify-between items-center mb-3 border-b pb-2">
+                            <h4 class="text-sm font-bold text-gray-800 uppercase">Attachments</h4>
+                            <button type="button" onclick="addTripAttachmentRow()" class="text-erp-main text-xs font-bold flex items-center gap-1 hover:underline">
+                                <i class="fa-solid fa-plus"></i> Add
+                            </button>
+                        </div>
+                        <div id="trip-attachments-body">
+                            ${attachments.map(a => `
+                                <div class="flex flex-col sm:flex-row gap-2 mb-2 items-stretch sm:items-center trip-attachment-row border-b sm:border-b-0 pb-2 sm:pb-0">
+                                    <select class="trip-attachment-type p-1.5 border border-gray-200 rounded text-sm w-full sm:w-48">
+                                        <option value="Weighment Slip" ${a.type === 'Weighment Slip' ? 'selected' : ''}>Weighment Slip</option>
+                                        <option value="POD" ${a.type === 'POD' ? 'selected' : ''}>POD</option>
+                                        <option value="Insurance Copy" ${a.type === 'Insurance Copy' ? 'selected' : ''}>Insurance Copy</option>
+                                        <option value="Other" ${a.type === 'Other' ? 'selected' : ''}>Other</option>
+                                    </select>
+                                    <input type="file" class="trip-attachment-file text-sm flex-1" onchange="handleTripAttachmentUpload(this)">
+                                    <input type="hidden" class="trip-attachment-file-value" value="${a.file || ''}">
+                                    <button type="button" class="text-red-500 hover:text-red-700 px-2 py-1 text-left sm:text-center" onclick="this.closest('.trip-attachment-row').remove()"><i class="fa-solid fa-xmark"></i></button>
+                                </div>`).join('')}
+                        </div>
+                    </div>
+
+                    <!-- TERMS & CONDITIONS [+] -->
+                    <div class="border rounded-lg p-4">
+                        <div class="flex justify-between items-center mb-3 border-b pb-2">
+                            <h4 class="text-sm font-bold text-gray-800 uppercase">Terms & Conditions</h4>
+                            <button type="button" onclick="quickAddTemplate('field_tcTemplate')" class="text-erp-main text-xs font-bold flex items-center gap-1 hover:underline">
+                                <i class="fa-solid fa-plus"></i> Add
+                            </button>
+                        </div>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Terms & Conditions</label>
+                                <div class="flex gap-2 items-center w-full">
+                                    <div class="flex-1">
+                                        <select id="field_tcTemplate" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm">
+                                            <option value="">Select Template...</option>
+                                            ${templateOptions}
+                                        </select>
+                                    </div>
+                                    <button type="button" onclick="quickAddTemplate('field_tcTemplate')" class="bg-erp-main text-white h-[38px] w-[42px] rounded hover:bg-erp-hover flex items-center justify-center shrink-0">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Terms & Conditions Text</label>
+                                <textarea id="field_termsConditions" rows="3" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm">${recordData.termsConditions || ''}</textarea>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Remarks</label>
+                                <textarea id="field_remarks" rows="2" class="w-full p-2 border border-gray-300 rounded focus:border-erp-main text-sm">${recordData.remarks || ''}</textarea>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+            `;
+
+            bodyEl.innerHTML = formHtml;
+            showModalWindow();
+
+            // Bind Event Handlers
+            initTripPOCalculators();
+
+            const clientSelect = document.getElementById('field_client');
+            if (clientSelect) {
+                clientSelect.addEventListener('change', function() {
+                    filterPOsByClient(this.value);
+                    autoFillDestinationFromClient(this.value);
+                });
+                if (recordId && recordData.client) {
+                    filterPOsByClient(recordData.client);
+                }
+            }
+
+            const vehicleSelect = document.getElementById('field_vehicle');
+            if (vehicleSelect) {
+                vehicleSelect.addEventListener('change', function() {
+                    autoFillDriverFromVehicle(this.value, 'trips');
+                });
+                if (recordId && recordData.vehicle) {
+                    autoFillDriverFromVehicle(recordData.vehicle, 'trips');
+                }
+            }
+
+            const insuranceSelect = document.getElementById('field_insurance');
+            const insurancePolicyWrap = bodyEl.querySelector('.field_insurancePolicyDetails_field_wrap');
+            if (insuranceSelect && insurancePolicyWrap) {
+                insuranceSelect.addEventListener('change', function() {
+                    insurancePolicyWrap.style.display = (this.value === 'Yes') ? '' : 'none';
+                });
+            }
+
+            const separateCheckbox = document.getElementById('field_separateConsignorConsignee');
+            if (separateCheckbox) {
+                separateCheckbox.addEventListener('change', toggleConsignorConsigneeFields);
+                toggleConsignorConsigneeFields();
+            }
+            initConsignorConsigneeSearch();
+
+            const tcSelect = document.getElementById('field_tcTemplate');
+            if (tcSelect) {
+                tcSelect.addEventListener('change', function() {
+                    const template = (state.data.templatesMaster || []).find(t => t.name === this.value || t.id === this.value);
+                    const tcTextEl = document.getElementById('field_termsConditions');
+                    if (template && tcTextEl) tcTextEl.value = template.content || '';
+                });
+            }
+        }
+
 
         // --- NEW FEATURE: ROLE MATRIX WITH GLOBAL & ROW SELECT ALL ---
         function renderRoleMatrixModal(bodyEl, recordData) {
@@ -11503,6 +11932,12 @@ document.getElementById('print-modal').classList.remove('hidden');
             const driverNameVal = document.getElementById('field_driverName')?.value || '';
             const driverPhoneVal = document.getElementById('field_driverPhone')?.value || '';
             const ewbNumberVal = document.getElementById('field_ewbNumber')?.value || '';
+            const taxInvoiceNumberVal = document.getElementById('field_taxInvoiceNumber')?.value || '';
+            const clientTransportationChargeVal = document.getElementById('field_clientTransportationCharge')?.value || '';
+            const transporterTransportationChargeVal = document.getElementById('field_transporterTransportationCharge')?.value || '';
+            const tcTemplateVal = document.getElementById('field_tcTemplate')?.value || '';
+            const termsConditionsVal = document.getElementById('field_termsConditions')?.value || '';
+            const separateConsignorConsigneeVal = Boolean(document.getElementById('field_separateConsignorConsignee')?.checked);
             const statusVal = document.getElementById('field_status')?.value || 'Draft';
             const remarksVal = document.getElementById('field_remarks')?.value || '';
             const acceptanceStatusVal = document.getElementById('field_acceptanceStatus')?.value || 'Pending Acceptance';
@@ -11609,6 +12044,12 @@ document.getElementById('print-modal').classList.remove('hidden');
                     if (consignor) normalizedRow.consignor = consignor;
                     if (consignee) normalizedRow.consignee = consignee;
                     if (remarksVal) normalizedRow.remarks = remarksVal;
+                    if (taxInvoiceNumberVal) normalizedRow.taxInvoiceNumber = taxInvoiceNumberVal;
+                    if (clientTransportationChargeVal) normalizedRow.clientTransportationCharge = clientTransportationChargeVal;
+                    if (transporterTransportationChargeVal) normalizedRow.transporterTransportationCharge = transporterTransportationChargeVal;
+                    if (tcTemplateVal) normalizedRow.tcTemplate = tcTemplateVal;
+                    if (termsConditionsVal) normalizedRow.termsConditions = termsConditionsVal;
+                    normalizedRow.separateConsignorConsignee = separateConsignorConsigneeVal;
                     if (receivedWeightVal) normalizedRow.receivedWeight = receivedWeightVal;
                     normalizedRow.acceptanceStatus = acceptanceStatusVal || 'Pending Acceptance';
 
@@ -11745,6 +12186,20 @@ document.getElementById('print-modal').classList.remove('hidden');
                     if (consignor) normalizedRow.consignor = consignor;
                     if (consignee) normalizedRow.consignee = consignee;
                     if (remarksVal) normalizedRow.remarks = remarksVal;
+                    if (taxInvoiceNumberVal) normalizedRow.taxInvoiceNumber = taxInvoiceNumberVal;
+                    if (clientTransportationChargeVal) normalizedRow.clientTransportationCharge = clientTransportationChargeVal;
+                    if (transporterTransportationChargeVal) normalizedRow.transporterTransportationCharge = transporterTransportationChargeVal;
+                    if (tcTemplateVal) normalizedRow.tcTemplate = tcTemplateVal;
+                    if (termsConditionsVal) normalizedRow.termsConditions = termsConditionsVal;
+                    normalizedRow.separateConsignorConsignee = separateConsignorConsigneeVal;
+                    if (existingRecord) {
+                        if (taxInvoiceNumberVal) existingRecord.taxInvoiceNumber = taxInvoiceNumberVal;
+                        if (clientTransportationChargeVal) existingRecord.clientTransportationCharge = clientTransportationChargeVal;
+                        if (transporterTransportationChargeVal) existingRecord.transporterTransportationCharge = transporterTransportationChargeVal;
+                        if (tcTemplateVal) existingRecord.tcTemplate = tcTemplateVal;
+                        if (termsConditionsVal) existingRecord.termsConditions = termsConditionsVal;
+                        existingRecord.separateConsignorConsignee = separateConsignorConsigneeVal;
+                    }
                     if (receivedWeightVal) normalizedRow.receivedWeight = receivedWeightVal;
                     normalizedRow.acceptanceStatus = acceptanceStatusVal || existingRecord?.acceptanceStatus || 'Pending Acceptance';
 
@@ -16909,6 +17364,151 @@ document.getElementById('print-modal').classList.remove('hidden');
                 field.dispatchEvent(new Event('change'));
             }
             showToast('Vehicle added.', 'success');
+        }
+
+        
+        function quickAddPO(targetModule, triggerFieldId) {
+            const isSales = targetModule === 'poReceived';
+            const title = isSales ? 'Quick Add Received PO' : 'Quick Add Issued PO';
+            const liveParties = typeof getLiveParties === 'function' ? getLiveParties() : (state.data.partiesMaster || []);
+            const parties = liveParties.filter(p => !p.companyId || p.companyId === state.currentCompany);
+            const filteredParties = parties.filter(p => {
+                const types = Array.isArray(p.type) ? p.type : [p.type];
+                return isSales ? types.includes('Client') : (types.includes('Vendor') || types.includes('Supplier') || types.includes('Transporter'));
+            });
+            const items = (state.data.itemMaster || []).filter(i => !i.companyId || i.companyId === state.currentCompany);
+            const currentClient = document.getElementById('field_client')?.value || '';
+
+            const overlay = document.createElement('div');
+            overlay.id = 'quick-add-overlay';
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-60 z-[95] flex items-center justify-center p-4';
+            overlay.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-5">
+                    <h3 class="text-lg font-bold mb-4">${title}</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">PO Number</label>
+                            <input type="text" id="qa-po-no" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="e.g. PO-1001">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">${isSales ? 'Client' : 'Vendor / Supplier'}</label>
+                            <select id="qa-po-party" class="w-full p-2 border border-gray-300 rounded text-sm">
+                                <option value="">Select...</option>
+                                ${filteredParties.map(p => `<option value="${p.name}" ${currentClient === p.name ? 'selected' : ''}>${p.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Item Name</label>
+                            <select id="qa-po-item" class="w-full p-2 border border-gray-300 rounded text-sm">
+                                <option value="">Select...</option>
+                                ${items.map(i => `<option value="${i.name}">${i.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Total Limit / Qty (MT)</label>
+                            <input type="number" step="0.01" id="qa-po-qty" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="0.00">
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button type="button" onclick="closeQuickAddOverlay()" class="px-4 py-2 bg-gray-100 rounded text-sm font-medium hover:bg-gray-200">Cancel</button>
+                        <button type="button" onclick="confirmQuickAddPO('${targetModule}', '${triggerFieldId}')" class="px-4 py-2 bg-erp-main text-white rounded text-sm font-medium hover:bg-erp-hover">Add</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+        }
+
+        function confirmQuickAddPO(targetModule, triggerFieldId) {
+            const poNo = document.getElementById('qa-po-no').value.trim();
+            const party = document.getElementById('qa-po-party').value;
+            const item = document.getElementById('qa-po-item').value;
+            const qty = parseFloat(document.getElementById('qa-po-qty').value) || 0;
+            if (!poNo || !party) {
+                showToast('PO Number and Party are required.', 'error');
+                return;
+            }
+            const today = new Date().toISOString().split('T')[0];
+            const newPO = {
+                id: poNo,
+                date: today,
+                dueDate: today,
+                party: party,
+                itemName: item || 'General Material',
+                itemQty: qty,
+                totalQty: qty,
+                consumedQty: 0,
+                balanceQty: qty,
+                unit: 'MT',
+                itemRate: 0,
+                status: 'Open',
+                companyId: state.currentCompany
+            };
+            if (!state.data[targetModule]) state.data[targetModule] = [];
+            state.data[targetModule].unshift(newPO);
+            if (state.liveMasters && state.liveMasters[targetModule]) state.liveMasters[targetModule].unshift(newPO);
+            logAudit(targetModule, 'Create', newPO);
+            closeQuickAddOverlay();
+            const field = document.getElementById(triggerFieldId);
+            if (field) {
+                const opt = document.createElement('option');
+                opt.value = poNo;
+                opt.textContent = `${poNo} - ${party} (${item || 'Material'})`;
+                opt.selected = true;
+                field.appendChild(opt);
+                field.dispatchEvent(new Event('change'));
+            }
+            showToast(`${poNo} added!`, 'success');
+        }
+
+        function quickAddTemplate(triggerFieldId) {
+            const overlay = document.createElement('div');
+            overlay.id = 'quick-add-overlay';
+            overlay.className = 'fixed inset-0 bg-black bg-opacity-60 z-[95] flex items-center justify-center p-4';
+            overlay.innerHTML = `
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-md p-5">
+                    <h3 class="text-lg font-bold mb-4">Quick Add Terms & Conditions Template</h3>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Template Name</label>
+                            <input type="text" id="qa-tmpl-name" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="e.g. Standard Freight Terms">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-gray-600 mb-1 uppercase">Terms & Conditions Content</label>
+                            <textarea id="qa-tmpl-content" rows="4" class="w-full p-2 border border-gray-300 rounded text-sm" placeholder="Enter terms and conditions text..."></textarea>
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button type="button" onclick="closeQuickAddOverlay()" class="px-4 py-2 bg-gray-100 rounded text-sm font-medium hover:bg-gray-200">Cancel</button>
+                        <button type="button" onclick="confirmQuickAddTemplate('${triggerFieldId}')" class="px-4 py-2 bg-erp-main text-white rounded text-sm font-medium hover:bg-erp-hover">Add</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(overlay);
+        }
+
+        function confirmQuickAddTemplate(triggerFieldId) {
+            const name = document.getElementById('qa-tmpl-name').value.trim();
+            const content = document.getElementById('qa-tmpl-content').value.trim();
+            if (!name || !content) {
+                showToast('Template Name and Content are required.', 'error');
+                return;
+            }
+            const newTmpl = { id: generateId('TMPL'), name, content, type: 'Fleet & Trips', companyId: state.currentCompany };
+            if (!state.data.templatesMaster) state.data.templatesMaster = [];
+            state.data.templatesMaster.unshift(newTmpl);
+            if (state.liveMasters && state.liveMasters.templatesMaster) state.liveMasters.templatesMaster.unshift(newTmpl);
+            logAudit('templatesMaster', 'Create', newTmpl);
+            closeQuickAddOverlay();
+            const field = document.getElementById(triggerFieldId);
+            if (field) {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.textContent = name;
+                opt.selected = true;
+                field.appendChild(opt);
+                field.dispatchEvent(new Event('change'));
+            }
+            const tcText = document.getElementById('field_termsConditions');
+            if (tcText) tcText.value = content;
+            showToast(`Template '${name}' added!`, 'success');
         }
 
         function addPtSlabRow() {
