@@ -4721,9 +4721,42 @@ const indianStates = [
                     if (state.liveMasterLoaded) state.liveMasterLoaded.trips = false;
                 } else if (Array.isArray(tripsRes.data)) {
                     // Enforce fail-closed client scoping: plant_id must match authorized plants
-                    liveTrips = tripsRes.data
+                    let rawTrips = tripsRes.data
                         .filter(t => authPlantIds.includes(t.plant_id) || (t['companyId'] && authPlantIds.includes(t['companyId'])))
                         .map(normalizeLiveTrip);
+
+                    // Re-sequence existing legacy random trips (TRP-xxxx) chronologically to LR-1, LR-2...
+                    rawTrips.sort((a, b) => {
+                        const da = a.date || a.trip_date || '';
+                        const db = b.date || b.trip_date || '';
+                        return da.localeCompare(db) || String(a.dbId || '').localeCompare(String(b.dbId || ''));
+                    });
+
+                    let currentLrIndex = 1;
+                    liveTrips = rawTrips.map(trip => {
+                        const lrMatch = String(trip.tripNumber || trip.id || '').match(/^LR[-_]?(\d+)$/i);
+                        if (lrMatch) {
+                            const num = parseInt(lrMatch[1], 10);
+                            if (num >= currentLrIndex) currentLrIndex = num + 1;
+                            return trip;
+                        }
+                        const oldId = trip.tripNumber || trip.id;
+                        const newLrId = `LR-${currentLrIndex++}`;
+                        trip.legacyTripNumber = oldId;
+                        trip.id = newLrId;
+                        trip.tripNumber = newLrId;
+                        trip.trip_number = newLrId;
+                        trip.lrNumber = newLrId;
+
+                        // Background sync to database if DB ID is present
+                        if (client && trip.dbId) {
+                            client.from('trips').update({ trip_number: newLrId }).eq('id', trip.dbId).then().catch(() => {});
+                        }
+                        return trip;
+                    });
+
+                    if (!state.data) state.data = {};
+                    state.data.trips = liveTrips;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.trips = true;
                 }
@@ -4738,9 +4771,40 @@ const indianStates = [
                     if (state.liveMasterLoaded) state.liveMasterLoaded.gateVerification = false;
                 } else if (Array.isArray(gateRes.data)) {
                     // Enforce fail-closed client scoping: plant_id must match authorized plants
-                    liveGateEntries = gateRes.data
+                    let rawGates = gateRes.data
                         .filter(g => authPlantIds.includes(g.plant_id) || (g['companyId'] && authPlantIds.includes(g['companyId'])))
                         .map(normalizeLiveGateEntry);
+
+                    // Re-sequence existing legacy gate entries chronologically to GATE-1, GATE-2...
+                    rawGates.sort((a, b) => {
+                        const da = a.date || a.entry_date || a.created_at || '';
+                        const db = b.date || b.entry_date || b.created_at || '';
+                        return da.localeCompare(db) || String(a.dbId || '').localeCompare(String(b.dbId || ''));
+                    });
+
+                    let currentGateIndex = 1;
+                    liveGateEntries = rawGates.map(entry => {
+                        const gateMatch = String(entry.entryNumber || entry.id || '').match(/^GATE[-_]?(\d+)$/i);
+                        if (gateMatch) {
+                            const num = parseInt(gateMatch[1], 10);
+                            if (num >= currentGateIndex) currentGateIndex = num + 1;
+                            return entry;
+                        }
+                        const oldId = entry.entryNumber || entry.id;
+                        const newGateId = `GATE-${currentGateIndex++}`;
+                        entry.legacyEntryNumber = oldId;
+                        entry.id = newGateId;
+                        entry.entryNumber = newGateId;
+                        entry.entry_number = newGateId;
+
+                        if (client && entry.dbId) {
+                            client.from('gate_entries').update({ entry_number: newGateId }).eq('id', entry.dbId).then().catch(() => {});
+                        }
+                        return entry;
+                    });
+
+                    if (!state.data) state.data = {};
+                    state.data.gateVerification = liveGateEntries;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.gateVerification = true;
                 }
