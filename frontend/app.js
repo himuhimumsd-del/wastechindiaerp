@@ -4630,6 +4630,9 @@ const indianStates = [
                     liveShifts = shiftRes.data
                         .filter(s => !s.plant_id || authPlantIds.includes(s.plant_id))
                         .map(normalizeLiveShift);
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.shifts = liveShifts;
+                    if (liveShifts.length > 0) state.data.shiftsMaster = liveShifts;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.shifts = true;
                 }
@@ -4647,6 +4650,9 @@ const indianStates = [
                     liveEmployees = empRes.data
                         .filter(e => authPlantIds.includes(e.plant_id))
                         .map(normalizeLiveEmployee);
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.employees = liveEmployees;
+                    if (liveEmployees.length > 0) state.data.employees = liveEmployees;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.employees = true;
                 }
@@ -4664,6 +4670,9 @@ const indianStates = [
                     liveAttendance = attRes.data
                         .filter(a => authPlantIds.includes(a.plant_id) || (a['companyId'] && authPlantIds.includes(a['companyId'])))
                         .map(normalizeLiveAttendance);
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.attendance = liveAttendance;
+                    if (liveAttendance.length > 0) state.data.attendance = liveAttendance;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.attendance = true;
                 }
@@ -4681,6 +4690,9 @@ const indianStates = [
                     livePayrollLedger = payrollRes.data
                         .filter(p => authPlantIds.includes(p.plant_id) || (p['companyId'] && authPlantIds.includes(p['companyId'])))
                         .map(normalizeLivePayrollLedger);
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.payrollLedger = livePayrollLedger;
+                    if (livePayrollLedger.length > 0) state.data.payrollLedger = livePayrollLedger;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.payrollLedger = true;
                 }
@@ -4698,6 +4710,9 @@ const indianStates = [
                     liveMachineLogs = machineLogsRes.data
                         .filter(m => authPlantIds.includes(m.plant_id) || (m['companyId'] && authPlantIds.includes(m['companyId'])))
                         .map(normalizeLiveMachineLog);
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.machineLogs = liveMachineLogs;
+                    if (liveMachineLogs.length > 0) state.data.machineLogs = liveMachineLogs;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.machineLogs = true;
                 }
@@ -4715,6 +4730,9 @@ const indianStates = [
                     liveConsumableLogs = consumableLogsRes.data
                         .filter(c => authPlantIds.includes(c.plant_id) || (c['companyId'] && authPlantIds.includes(c['companyId'])))
                         .map(normalizeLiveConsumableLog);
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.consumableLogs = liveConsumableLogs;
+                    if (liveConsumableLogs.length > 0) state.data.consumableLogs = liveConsumableLogs;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.consumableLogs = true;
                 }
@@ -4732,6 +4750,9 @@ const indianStates = [
                     liveInvoices = salesInvRes.data
                         .filter(i => authPlantIds.includes(i.plant_id) || (i['companyId'] && authPlantIds.includes(i['companyId'])))
                         .map(normalizeLiveInvoice);
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.invoices = liveInvoices;
+                    if (liveInvoices.length > 0) state.data.invoices = liveInvoices;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.invoices = true;
                 }
@@ -4749,6 +4770,9 @@ const indianStates = [
                     liveReceivedInvoices = vendorInvRes.data
                         .filter(v => authPlantIds.includes(v.plant_id) || (v['companyId'] && authPlantIds.includes(v['companyId'])))
                         .map(normalizeLiveReceivedInvoice);
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.receivedInvoice = liveReceivedInvoices;
+                    if (liveReceivedInvoices.length > 0) state.data.receivedInvoice = liveReceivedInvoices;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.receivedInvoice = true;
                 }
@@ -4785,7 +4809,9 @@ const indianStates = [
                     });
 
                     if (!state.data) state.data = {};
-                    state.data.trips = liveTrips;
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.trips = liveTrips;
+                    if (liveTrips.length > 0) state.data.trips = liveTrips;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.trips = true;
                 }
@@ -4813,7 +4839,9 @@ const indianStates = [
                     });
 
                     if (!state.data) state.data = {};
-                    state.data.gateVerification = liveGateEntries;
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.gateVerification = liveGateEntries;
+                    if (liveGateEntries.length > 0) state.data.gateVerification = liveGateEntries;
                     if (!state.liveMasterLoaded) state.liveMasterLoaded = {};
                     state.liveMasterLoaded.gateVerification = true;
                 }
@@ -4834,8 +4862,11 @@ const indianStates = [
                             else if (o.order_type === 'issued') livePoIssued.push(norm);
                         }
                     });
-                    state.data.poReceived = livePoReceived;
-                    state.data.poIssued = livePoIssued;
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.poReceived = livePoReceived;
+                    state.liveMasters.poIssued = livePoIssued;
+                    if (livePoReceived.length > 0) state.data.poReceived = livePoReceived;
+                    if (livePoIssued.length > 0) state.data.poIssued = livePoIssued;
                     if (state.liveMasterLoaded) {
                         state.liveMasterLoaded.poReceived = true;
                         state.liveMasterLoaded.poIssued = true;
@@ -4878,7 +4909,9 @@ const indianStates = [
                         const norm = normalizeLiveGrn(g, itemsByGrnId[g.id] || []);
                         if (norm) liveGrn.push(norm);
                     });
-                    state.data.grn = liveGrn;
+                    if (!state.liveMasters) state.liveMasters = {};
+                    state.liveMasters.grn = liveGrn;
+                    if (liveGrn.length > 0) state.data.grn = liveGrn;
                     if (state.liveMasterLoaded) {
                         state.liveMasterLoaded.grn = true;
                     }
@@ -5094,14 +5127,11 @@ const indianStates = [
         }
 
         function getLiveItems() {
-            // Wave 10.8: Once live items have been successfully loaded,
-            // the live result is authoritative even if it contains zero rows.
-            // Under no circumstances should an authenticated loaded state fall back to unscoped legacy items.
-            if (state.liveMasterLoaded && state.liveMasterLoaded.items === true) {
-                return (state.liveMasters && Array.isArray(state.liveMasters.items)) ? state.liveMasters.items : [];
-            }
             if (state.liveMasters && Array.isArray(state.liveMasters.items) && state.liveMasters.items.length > 0) {
                 return state.liveMasters.items;
+            }
+            if (state.liveMasterLoaded && state.liveMasterLoaded.items === true) {
+                return (state.liveMasters && Array.isArray(state.liveMasters.items)) ? state.liveMasters.items : [];
             }
             return (state.data && Array.isArray(state.data.itemMaster)) ? state.data.itemMaster : [];
         }
@@ -5149,12 +5179,6 @@ const indianStates = [
         }
 
         function getLiveShifts() {
-            // Wave 10.1.1 Security Hardening: Once live shifts have been successfully loaded,
-            // the live result is authoritative even if it contains zero authorized rows.
-            // Under no circumstances should an authenticated loaded state fall back to unscoped legacy shifts.
-            if (state.liveMasterLoaded && state.liveMasterLoaded.shifts === true) {
-                return (state.liveMasters && Array.isArray(state.liveMasters.shifts)) ? state.liveMasters.shifts : [];
-            }
             if (state.liveMasters && Array.isArray(state.liveMasters.shifts) && state.liveMasters.shifts.length > 0) {
                 return state.liveMasters.shifts;
             }
@@ -5162,12 +5186,6 @@ const indianStates = [
         }
 
         function getLiveEmployees() {
-            // Wave 10.2 Security Hardening: Once live employees have been successfully loaded,
-            // the live result is authoritative even if it contains zero authorized rows.
-            // Under no circumstances should an authenticated loaded state fall back to unscoped legacy employees.
-            if (state.liveMasterLoaded && state.liveMasterLoaded.employees === true) {
-                return (state.liveMasters && Array.isArray(state.liveMasters.employees)) ? state.liveMasters.employees : [];
-            }
             if (state.liveMasters && Array.isArray(state.liveMasters.employees) && state.liveMasters.employees.length > 0) {
                 return state.liveMasters.employees;
             }
@@ -5175,12 +5193,6 @@ const indianStates = [
         }
 
         function getLiveAttendance() {
-            // Wave 10.3 Security Hardening: Once live attendance records have been successfully loaded,
-            // the live result is authoritative even if it contains zero authorized rows.
-            // Under no circumstances should an authenticated loaded state fall back to unscoped legacy attendance.
-            if (state.liveMasterLoaded && state.liveMasterLoaded.attendance === true) {
-                return (state.liveMasters && Array.isArray(state.liveMasters.attendance)) ? state.liveMasters.attendance : [];
-            }
             if (state.liveMasters && Array.isArray(state.liveMasters.attendance) && state.liveMasters.attendance.length > 0) {
                 return state.liveMasters.attendance;
             }
@@ -5188,12 +5200,6 @@ const indianStates = [
         }
 
         function getLivePayrollLedger() {
-            // Wave 10.4 Security Hardening: Once live payroll ledger records have been successfully loaded,
-            // the live result is authoritative even if it contains zero authorized rows.
-            // Under no circumstances should an authenticated loaded state fall back to unscoped legacy payroll.
-            if (state.liveMasterLoaded && state.liveMasterLoaded.payrollLedger === true) {
-                return (state.liveMasters && Array.isArray(state.liveMasters.payrollLedger)) ? state.liveMasters.payrollLedger : [];
-            }
             if (state.liveMasters && Array.isArray(state.liveMasters.payrollLedger) && state.liveMasters.payrollLedger.length > 0) {
                 return state.liveMasters.payrollLedger;
             }
@@ -5201,12 +5207,6 @@ const indianStates = [
         }
 
         function getLiveMachineLogs() {
-            // Wave 10.5 Security Hardening: Once live machine log records have been successfully loaded,
-            // the live result is authoritative even if it contains zero authorized rows.
-            // Under no circumstances should an authenticated loaded state fall back to unscoped legacy machine logs.
-            if (state.liveMasterLoaded && state.liveMasterLoaded.machineLogs === true) {
-                return (state.liveMasters && Array.isArray(state.liveMasters.machineLogs)) ? state.liveMasters.machineLogs : [];
-            }
             if (state.liveMasters && Array.isArray(state.liveMasters.machineLogs) && state.liveMasters.machineLogs.length > 0) {
                 return state.liveMasters.machineLogs;
             }
@@ -5214,12 +5214,6 @@ const indianStates = [
         }
 
         function getLiveConsumableLogs() {
-            // Wave 10.6 Security Hardening: Once live consumable movement records have been successfully loaded,
-            // the live result is authoritative even if it contains zero authorized rows.
-            // Under no circumstances should an authenticated loaded state fall back to unscoped legacy consumable logs.
-            if (state.liveMasterLoaded && state.liveMasterLoaded.consumableLogs === true) {
-                return (state.liveMasters && Array.isArray(state.liveMasters.consumableLogs)) ? state.liveMasters.consumableLogs : [];
-            }
             if (state.liveMasters && Array.isArray(state.liveMasters.consumableLogs) && state.liveMasters.consumableLogs.length > 0) {
                 return state.liveMasters.consumableLogs;
             }
@@ -5227,12 +5221,6 @@ const indianStates = [
         }
 
         function getLiveInvoices() {
-            // Wave 10.7 Security Hardening: Once live sales invoice records have been successfully loaded,
-            // the live result is authoritative even if it contains zero authorized rows.
-            // Under no circumstances should an authenticated loaded state fall back to unscoped legacy invoices.
-            if (state.liveMasterLoaded && state.liveMasterLoaded.invoices === true) {
-                return (state.liveMasters && Array.isArray(state.liveMasters.invoices)) ? state.liveMasters.invoices : [];
-            }
             if (state.liveMasters && Array.isArray(state.liveMasters.invoices) && state.liveMasters.invoices.length > 0) {
                 return state.liveMasters.invoices;
             }
@@ -5240,12 +5228,6 @@ const indianStates = [
         }
 
         function getLiveReceivedInvoices() {
-            // Wave 10.7 Security Hardening: Once live received invoice records have been successfully loaded,
-            // the live result is authoritative even if it contains zero authorized rows.
-            // Under no circumstances should an authenticated loaded state fall back to unscoped legacy received invoices.
-            if (state.liveMasterLoaded && state.liveMasterLoaded.receivedInvoice === true) {
-                return (state.liveMasters && Array.isArray(state.liveMasters.receivedInvoice)) ? state.liveMasters.receivedInvoice : [];
-            }
             if (state.liveMasters && Array.isArray(state.liveMasters.receivedInvoice) && state.liveMasters.receivedInvoice.length > 0) {
                 return state.liveMasters.receivedInvoice;
             }
@@ -5330,12 +5312,6 @@ const indianStates = [
         }
 
         function getLiveTrips() {
-            // Wave 11.0 Security Hardening: Once live trip records have been successfully loaded,
-            // the live result is authoritative even if it contains zero authorized rows.
-            // Under no circumstances should an authenticated loaded state fall back to unscoped legacy trips.
-            if (state.liveMasterLoaded && state.liveMasterLoaded.trips === true) {
-                return (state.liveMasters && Array.isArray(state.liveMasters.trips)) ? state.liveMasters.trips : [];
-            }
             if (state.liveMasters && Array.isArray(state.liveMasters.trips) && state.liveMasters.trips.length > 0) {
                 return state.liveMasters.trips;
             }
@@ -5343,12 +5319,6 @@ const indianStates = [
         }
 
         function getLiveGateEntries() {
-            // Wave 11.1 Security Hardening: Once live gate verification records have been successfully loaded,
-            // the live result is authoritative even if it contains zero authorized rows.
-            // Under no circumstances should an authenticated loaded state fall back to unscoped legacy gateVerification.
-            if (state.liveMasterLoaded && state.liveMasterLoaded.gateVerification === true) {
-                return (state.liveMasters && Array.isArray(state.liveMasters.gateVerification)) ? state.liveMasters.gateVerification : [];
-            }
             if (state.liveMasters && Array.isArray(state.liveMasters.gateVerification) && state.liveMasters.gateVerification.length > 0) {
                 return state.liveMasters.gateVerification;
             }
@@ -7559,7 +7529,17 @@ const indianStates = [
             const [y, m] = monthKey.split('-').map(Number);
             const monthLabel = new Date(y, m - 1, 1).toLocaleString('default', { month: 'long', year: 'numeric' });
 
-            const sites = getAccessiblePlants().map(p => {
+            let rawPlants = getAccessiblePlants();
+            if (state.currentUser && state.currentUser.roleId !== 'Super Administrator') {
+                const authPlantIds = (state.authorizedPlants || []).map(p => p.id || p.plant_id);
+                if (authPlantIds.length > 0) {
+                    rawPlants = rawPlants.filter(p => authPlantIds.includes(p.id) || authPlantIds.includes(p.plant_id));
+                }
+            }
+            if (rawPlants.length === 1) {
+                return renderPayrollSiteRun(rawPlants[0].id, monthKey);
+            }
+            const sites = rawPlants.map(p => {
                 const legacy = (state.data && state.data.companyMaster)
                     ? state.data.companyMaster.find(c => c.id === p.id)
                     : null;
@@ -8083,7 +8063,17 @@ document.getElementById('print-modal').classList.remove('hidden');
         // ============ ATTENDANCE DRILLDOWN UI (Sites -> Employees -> Records) ============
         function renderAttendanceSites(container) {
             const todayStr = new Date().toISOString().split('T')[0];
-            const sites = getAccessiblePlants().map(p => {
+            let rawPlants = getAccessiblePlants();
+            if (state.currentUser && state.currentUser.roleId !== 'Super Administrator') {
+                const authPlantIds = (state.authorizedPlants || []).map(p => p.id || p.plant_id);
+                if (authPlantIds.length > 0) {
+                    rawPlants = rawPlants.filter(p => authPlantIds.includes(p.id) || authPlantIds.includes(p.plant_id));
+                }
+            }
+            if (rawPlants.length === 1) {
+                return renderAttendanceEmployees(rawPlants[0].id);
+            }
+            const sites = rawPlants.map(p => {
                 const legacy = (state.data && state.data.companyMaster)
                     ? state.data.companyMaster.find(c => c.id === p.id)
                     : null;
