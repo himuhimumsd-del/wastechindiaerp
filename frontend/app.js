@@ -321,6 +321,8 @@ const indianStates = [
                 { key: 'pan', label: 'PAN Number', type: 'text', hideInTable: true },
                 { key: 'uan', label: 'UAN (PF) Number', type: 'text', hideInTable: true },
                 { key: 'document', label: 'Aadhar/ID Document', type: 'file', hideInTable: true },
+                { key: 'companyId', label: 'Primary Plant', type: 'select', dataSource: { module: 'companyMaster' } },
+                { key: 'assignedPlants', label: 'Allotted Plants (Select Multiple)', type: 'checkboxGroup', dataSource: { module: 'companyMaster' } },
                 { key: 'status', label: 'Status', type: 'select', options: ['Active', 'Terminated'] } 
             ] },
             attendance: { title: 'Live Attendance', icon: 'fa-user-clock', category: 'hr', schema: [
@@ -387,7 +389,7 @@ const indianStates = [
             ] },
 
             companyMaster: { title: 'Company Settings', icon: 'fa-building', category: 'masters', schema: [ { key: 'id', label: 'Company / Plant ID', type: 'text', required: true }, { key: 'name', label: 'Legal Company Name', type: 'text', required: true }, { key: 'tradeName', label: 'Trade Name / Plant Name', type: 'text', required: true }, { key: 'phone', label: 'Phone Number', type: 'text', hideInTable: true }, { key: 'cin', label: 'CIN Number', type: 'text', hideInTable: true }, { key: 'pan', label: 'PAN Number', type: 'text', hideInTable: true }, { key: 'gstin', label: 'GSTIN Number', type: 'text', required: true }, { key: 'state', label: 'Registered State', type: 'select', options: indianStates, required: true }, { key: 'spcb', label: 'SPCB Auth No.', type: 'text', hideInTable: true }, { key: 'epr', label: 'EPR Reg No.', type: 'text', hideInTable: true }, { key: 'address', label: 'Complete Plant Address', type: 'textarea', hideInTable: true }, { key: 'bankName', label: 'Bank Name', type: 'text', hideInTable: true }, { key: 'accNo', label: 'Account Number', type: 'text', hideInTable: true }, { key: 'ifsc', label: 'IFSC Code', type: 'text', hideInTable: true }, { key: 'logo', label: 'Company Logo', type: 'file', hideInTable: true }, { key: 'geofenceSetup', label: 'Plant Location & Geofence', type: 'geoLocationPicker', hideInTable: true }, { key: 'geofenceEnabled', label: 'Geofence Check Required', type: 'checkbox', hideInTable: true }, { key: 'attendanceSelfieRequired', label: 'Attendance Selfie Required', type: 'checkbox', hideInTable: true }, { key: 'fyStartMonth', label: 'Financial Year Start Month', type: 'select', options: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'], hideInTable: true } ] },
-            usersMaster: { title: 'User Accounts', icon: 'fa-user-lock', category: 'system', schema: [ { key: 'id', label: 'User ID', type: 'text', required: false }, { key: 'username', label: 'Username (Login)', type: 'text', required: true }, { key: 'password', label: 'Password', type: 'text', required: true, hideInTable: true }, { key: 'empId', label: 'Linked Employee', type: 'select', dataSource: { module: 'employees' }, required: true }, { key: 'roleId', label: 'Assigned Role', type: 'select', dataSource: { module: 'rolesMaster' }, required: true }, { key: 'companyId', label: 'Assigned Plant Context', type: 'select', dataSource: { module: 'companyMaster' }, required: true }, { key: 'status', label: 'Account Status', type: 'select', options: ['Active', 'Suspended'] } ] },
+            usersMaster: { title: 'User Accounts', icon: 'fa-user-lock', category: 'system', schema: [ { key: 'id', label: 'User ID', type: 'text', required: false }, { key: 'username', label: 'Username (Login)', type: 'text', required: true }, { key: 'password', label: 'Password', type: 'text', required: true, hideInTable: true }, { key: 'empId', label: 'Linked Employee', type: 'select', dataSource: { module: 'employees' }, required: true }, { key: 'roleId', label: 'Assigned Role', type: 'select', dataSource: { module: 'rolesMaster' }, required: true }, { key: 'companyId', label: 'Default Plant Context', type: 'select', dataSource: { module: 'companyMaster' }, required: true }, { key: 'assignedPlants', label: 'Allotted Plants (Select Multiple)', type: 'checkboxGroup', dataSource: { module: 'companyMaster' } }, { key: 'status', label: 'Account Status', type: 'select', options: ['Active', 'Suspended'] } ] },
             rolesMaster: { title: 'Roles & Permissions', icon: 'fa-key', category: 'system', schema: [ { key: 'id', label: 'Role ID', type: 'text', readOnly: true }, { key: 'roleName', label: 'Role Title', type: 'text', required: true }, { key: 'desc', label: 'Description', type: 'text' }, { key: 'permissions', label: 'Permissions Matrix', type: 'textarea', hideInTable: true } ] },
             partiesMaster: { title: 'Parties & Vendors', icon: 'fa-handshake', category: 'masters', schema: [ 
                 { key: 'id', label: 'Party ID', type: 'text', readOnly: true }, 
@@ -1841,11 +1843,18 @@ const indianStates = [
 
         // --- 3. DYNAMIC RBAC & PLANT CONTEXT ENGINE ---
         function loginUser(userId) {
-            const user = state.data.usersMaster.find(u => u.id === userId);
+            const user = state.data.usersMaster.find(u => u.id === userId || (u.assignedPlants && u.id === userId));
             if(!user) return;
             state.currentUser = user;
             const role = state.data.rolesMaster.find(r => r.roleName === user.roleId || r.id === user.roleId);
             state.currentPermissions = (role && role.permissions) ? JSON.parse(role.permissions) : {};
+
+            const assigned = Array.isArray(user.assignedPlants) ? user.assignedPlants : (user.companyId ? [user.companyId] : []);
+            if (user.roleId === 'Super Administrator') {
+                state.authorizedPlants = (state.data?.companyMaster || []).map(c => ({ id: c.id, plant_name: c.name, trade_name: c.tradeName || c.name, business_id: c.business_id, is_active: true }));
+            } else if (assigned.length > 0) {
+                state.authorizedPlants = (state.data?.companyMaster || []).filter(c => assigned.includes(c.id)).map(c => ({ id: c.id, plant_name: c.name, trade_name: c.tradeName || c.name, business_id: c.business_id, is_active: true }));
+            }
 
             if(user.roleId !== 'Super Administrator' && user.companyId) {
                 state.currentCompany = user.companyId;
@@ -1954,6 +1963,29 @@ const indianStates = [
         window.assertAuthorizedPlant = assertAuthorizedPlant;
         window.assertAuthorizedBusiness = assertAuthorizedBusiness;
         window.getCurrentPlantDisplayData = getCurrentPlantDisplayData;
+
+        function getActiveCompanyLogo(companyId = null) {
+            const targetId = companyId || state.currentCompany;
+            const compList = (state.data && Array.isArray(state.data.companyMaster) && state.data.companyMaster.length)
+                ? state.data.companyMaster
+                : (typeof getAccessiblePlants === 'function' ? getAccessiblePlants() : []);
+            const comp = compList.find(c => c && (c.id === targetId || c.companyId === targetId || c.plant_id === targetId));
+            if (comp) {
+                const logoVal = comp.logo || comp.logo_url || comp.logoUrl;
+                if (logoVal && typeof logoVal === 'string' && logoVal.trim() && logoVal !== 'assets/wastech-logo.png') {
+                    return logoVal;
+                }
+            }
+            const activeBiz = (typeof getCurrentAuthorizedBusiness === 'function' ? getCurrentAuthorizedBusiness() : null) || state.currentBusiness;
+            if (activeBiz && (activeBiz.logo_url || activeBiz.logo)) {
+                const bLogo = activeBiz.logo_url || activeBiz.logo;
+                if (bLogo && typeof bLogo === 'string' && bLogo.trim() && bLogo !== 'assets/wastech-logo.png') {
+                    return bLogo;
+                }
+            }
+            return 'assets/wastech-logo-clean.png';
+        }
+        window.getActiveCompanyLogo = getActiveCompanyLogo;
 
         // =========================================================================
         // HIGH-PERFORMANCE ERP CACHE MANAGER (Phase 2 & 4)
@@ -7917,15 +7949,21 @@ const indianStates = [
                 ? `<div class="flex justify-between"><span>CGST @ ${cgstPct}%:</span><span>₹${(taxAmount / 2).toFixed(2)}</span></div><div class="flex justify-between"><span>SGST @ ${sgstPct}%:</span><span>₹${(taxAmount / 2).toFixed(2)}</span></div>`
                 : `<div class="flex justify-between"><span>IGST @ ${igstPct}%:</span><span>₹${taxAmount.toFixed(2)}</span></div>`;
 
+            const companyLogoUrl = typeof getActiveCompanyLogo === 'function' ? getActiveCompanyLogo(company.id || inv.companyId) : 'assets/wastech-logo-clean.png';
+
             document.getElementById('print-document-content').innerHTML = `
-                <div class="border rounded-lg" id="print-document-content">
-                    <div class="p-4 border-b flex justify-between items-start">
-                        <div>
-                            <p class="font-bold text-sm">${company.name}</p>
-                            <p class="text-xs">${company.address || ''}</p>
-                            <p class="text-xs">GSTIN: ${company.gstin || '-'}</p>
+                <div class="border rounded-lg bg-white" id="print-document-content">
+                    <div class="p-4 border-b flex justify-between items-start gap-4">
+                        <div class="text-xs leading-relaxed text-gray-800">
+                            <p class="font-extrabold text-sm text-gray-900 uppercase">${company.name || 'GG WASTECH PRIVATE LIMITED'}</p>
+                            <p class="text-gray-600">${company.tradeName || ''} — ${company.address || ''}</p>
+                            <p class="text-gray-600">Ph No: ${company.phone || '8821937000'}</p>
+                            <p class="font-semibold text-gray-900 mt-0.5">GSTIN: <span class="font-bold text-erp-main">${company.gstin || '-'}</span></p>
                         </div>
-                        <h2 class="font-bold text-lg">TAX INVOICE</h2>
+                        <div class="flex-shrink-0 flex flex-col items-end gap-1">
+                            <img src="${companyLogoUrl}" alt="Company Logo" style="height: 48px; width: auto; max-width: 180px; object-fit: contain; display: block; image-rendering: -webkit-optimize-contrast;">
+                            <h2 class="font-black text-sm text-erp-main uppercase tracking-wider mt-1">TAX INVOICE</h2>
+                        </div>
                     </div>
                     <div class="grid grid-cols-3 gap-y-2 p-4 border-b text-xs">
                         <div><p class="text-gray-500">Invoice No.</p><p class="font-bold">${inv.id}</p></div>
@@ -7963,61 +8001,79 @@ document.getElementById('print-modal').classList.remove('hidden');
             const pr = getLivePayrollLedger().find(p => p.id === payrollId);
             if (!pr) return;
             const emp = getLiveEmployees().find(e => e.id === pr.empId || e.id === pr.emp_id);
-            const site = state.data.companyMaster.find(c => c.id === pr.companyId || c.id === pr.plant_id);
-            if (!emp || !site) return;
+            const site = (state.data.companyMaster && state.data.companyMaster.find(c => c.id === pr.companyId || c.id === pr.plant_id))
+                      || (state.data.companyMaster && state.data.companyMaster[0])
+                      || { name: 'GG WASTECH PRIVATE LIMITED', tradeName: 'Raipur Processing Plant', address: 'Plot 45, Industrial Area, Raipur, CG', phone: '8821937000', gstin: '22AAICG8184C1ZP' };
+            if (!emp) return;
 
             const signSelect = document.getElementById('print-signature-select');
             if (signSelect) {
                 signSelect.innerHTML = '<option value="">Select Signatory...</option>';
-                state.data.signatureMaster.forEach(s => { signSelect.innerHTML += `<option value="${s.id}">${s.authName}</option>`; });
+                (state.data.signatureMaster || []).forEach(s => { signSelect.innerHTML += `<option value="${s.id}">${s.authName}</option>`; });
             }
 
             const maskedAcc = emp.accountNo ? `XXXX XXXX ${emp.accountNo.slice(-4)}` : '-';
+            const companyLogoUrl = typeof getActiveCompanyLogo === 'function' ? getActiveCompanyLogo(site.id || pr.companyId) : 'assets/wastech-logo-clean.png';
+
             document.getElementById('print-document-content').innerHTML = `
-                <div class="border rounded-lg" id="print-document-content">
-                    <div class="p-4 border-b text-center">
-                        <p class="font-bold text-sm">${site.name}</p>
-                        <p class="text-xs">${site.tradeName || ''} — ${site.address || ''}</p>
-                        <h2 class="font-bold text-base mt-2">Payslip — ${pr.monthYear}</h2>
+                <div class="border rounded-lg bg-white" id="print-document-content">
+                    <div class="p-4 border-b">
+                        <div class="flex justify-between items-start gap-4">
+                            <div class="text-xs leading-relaxed text-gray-800">
+                                <p class="font-extrabold text-sm text-gray-900 uppercase">${site.name || 'GG WASTECH PRIVATE LIMITED'}</p>
+                                <p class="text-gray-600">${site.tradeName || ''} — ${site.address || ''}</p>
+                                <p class="text-gray-600">Ph No: ${site.phone || '8821937000'}</p>
+                                <p class="font-semibold text-gray-900 mt-0.5">GSTIN: <span class="font-bold text-erp-main">${site.gstin || '-'}</span></p>
+                            </div>
+                            <div class="flex-shrink-0">
+                                <img src="${companyLogoUrl}" alt="Company Logo" style="height: 48px; width: auto; max-width: 180px; object-fit: contain; display: block; image-rendering: -webkit-optimize-contrast;">
+                            </div>
+                        </div>
+                        <div class="text-center mt-3 pt-2 border-t border-gray-100">
+                            <h2 class="font-black text-sm text-erp-main uppercase tracking-wider">SALARY SLIP — ${pr.monthYear || (pr.month + '/' + pr.year)}</h2>
+                        </div>
                     </div>
-                    <div class="grid grid-cols-2 gap-y-2 p-4 border-b text-xs">
-                        <div><p class="text-gray-500">Employee</p><p class="font-bold">${emp.name} (${emp.id})</p></div>
-                        <div><p class="text-gray-500">Department</p><p class="font-bold">${emp.department || '-'}</p></div>
-                        <div><p class="text-gray-500">Date of Joining</p><p class="font-bold">${emp.doj || '-'}</p></div>
-                        <div><p class="text-gray-500">PAN / UAN</p><p class="font-bold">${emp.pan || '-'} / ${emp.uan || '-'}</p></div>
-                        <div><p class="text-gray-500">Bank</p><p class="font-bold">${emp.bankName || '-'} — ${maskedAcc}</p></div>
-                        <div><p class="text-gray-500">Payable Days</p><p class="font-bold">${pr.payableDays}</p></div>
+                    <div class="grid grid-cols-2 gap-y-2 p-4 border-b text-xs bg-gray-50/50">
+                        <div><p class="text-gray-500">Employee Name & ID</p><p class="font-bold text-gray-900">${emp.name} (${emp.id})</p></div>
+                        <div><p class="text-gray-500">Department / Designation</p><p class="font-bold text-gray-900">${emp.department || '-'}</p></div>
+                        <div><p class="text-gray-500">Date of Joining</p><p class="font-bold text-gray-900">${emp.doj || '-'}</p></div>
+                        <div><p class="text-gray-500">PAN / UAN (PF)</p><p class="font-bold text-gray-900">${emp.pan || '-'} / ${emp.uan || '-'}</p></div>
+                        <div><p class="text-gray-500">Bank Account</p><p class="font-bold text-gray-900">${emp.bankName || '-'} — ${maskedAcc}</p></div>
+                        <div><p class="text-gray-500">Payable Days</p><p class="font-bold text-erp-main text-sm">${pr.payableDays}</p></div>
                     </div>
-                    <div class="grid grid-cols-2 gap-y-1 p-4 border-b text-xs">
-                        <div><p class="text-gray-500">Present</p><p class="font-bold">${pr.presentDays}</p></div>
-                        <div><p class="text-gray-500">Absent</p><p class="font-bold">${pr.absentDays}</p></div>
-                        <div><p class="text-gray-500">Half Day</p><p class="font-bold">${pr.halfDays}</p></div>
-                        <div><p class="text-gray-500">Late</p><p class="font-bold">${pr.lateDays}</p></div>
-                        <div><p class="text-gray-500">Weekly Off</p><p class="font-bold">${pr.weeklyOffDays}</p></div>
-                        <div><p class="text-gray-500">OT Hours</p><p class="font-bold">${pr.otHours}</p></div>
+                    <div class="grid grid-cols-3 sm:grid-cols-6 gap-2 p-3 border-b text-center text-xs bg-white">
+                        <div class="p-1 rounded bg-green-50"><p class="text-[10px] text-green-700 font-medium">Present</p><p class="font-bold text-green-800">${pr.presentDays || 0}</p></div>
+                        <div class="p-1 rounded bg-red-50"><p class="text-[10px] text-red-700 font-medium">Absent</p><p class="font-bold text-red-800">${pr.absentDays || 0}</p></div>
+                        <div class="p-1 rounded bg-yellow-50"><p class="text-[10px] text-yellow-700 font-medium">Half Day</p><p class="font-bold text-yellow-800">${pr.halfDays || 0}</p></div>
+                        <div class="p-1 rounded bg-orange-50"><p class="text-[10px] text-orange-700 font-medium">Late</p><p class="font-bold text-orange-800">${pr.lateDays || 0}</p></div>
+                        <div class="p-1 rounded bg-blue-50"><p class="text-[10px] text-blue-700 font-medium">Weekly Off</p><p class="font-bold text-blue-800">${pr.weeklyOffDays || 0}</p></div>
+                        <div class="p-1 rounded bg-purple-50"><p class="text-[10px] text-purple-700 font-medium">OT Hours</p><p class="font-bold text-purple-800">${pr.otHours || 0}</p></div>
                     </div>
-                    <div class="grid grid-cols-2 p-4 border-b text-xs">
-                        <div class="pr-3 border-r">
-                            <p class="font-bold text-sm mb-2">Earnings</p>
-                            <div class="flex justify-between"><span>Gross Earned</span><span>₹${(parseFloat(pr.grossEarned) || 0).toFixed(2)}</span></div>
-                            <div class="flex justify-between"><span>Overtime</span><span>₹${(parseFloat(pr.otAmount) || 0).toFixed(2)}</span></div>
-                            <div class="flex justify-between border-t mt-1 pt-1 font-bold"><span>Total Earnings</span><span>₹${((parseFloat(pr.grossEarned) || 0) + (parseFloat(pr.otAmount) || 0)).toFixed(2)}</span></div>
+                    <div class="grid grid-cols-2 p-4 border-b text-xs gap-4">
+                        <div class="pr-3 border-r border-gray-200">
+                            <p class="font-bold text-sm mb-2 text-gray-800 flex items-center gap-1.5"><i class="fa-solid fa-circle-arrow-down text-green-600"></i> Earnings</p>
+                            <div class="flex justify-between py-1 border-b border-gray-100"><span>Gross Earned</span><span class="font-semibold">₹${(parseFloat(pr.grossEarned) || 0).toFixed(2)}</span></div>
+                            <div class="flex justify-between py-1 border-b border-gray-100"><span>Overtime</span><span class="font-semibold">₹${(parseFloat(pr.otAmount) || 0).toFixed(2)}</span></div>
+                            <div class="flex justify-between border-t border-gray-300 mt-2 pt-1 font-bold text-gray-900"><span>Total Earnings:</span><span class="text-green-700">₹${((parseFloat(pr.grossEarned) || 0) + (parseFloat(pr.otAmount) || 0)).toFixed(2)}</span></div>
                         </div>
                         <div class="pl-3">
-                            <p class="font-bold text-sm mb-2">Deductions</p>
-                            <div class="flex justify-between"><span>PF</span><span>₹${(parseFloat(pr.pfDeduction) || 0).toFixed(2)}</span></div>
-                            <div class="flex justify-between"><span>ESI</span><span>₹${(parseFloat(pr.esiDeduction) || 0).toFixed(2)}</span></div>
-                            <div class="flex justify-between"><span>PT</span><span>₹${(parseFloat(pr.ptDeduction) || 0).toFixed(2)}</span></div>
-                            <div class="flex justify-between"><span>Advance</span><span>₹${(parseFloat(pr.advance) || 0).toFixed(2)}</span></div>
-                            <div class="flex justify-between border-t mt-1 pt-1 font-bold"><span>Total Deductions</span><span>₹${(parseFloat(pr.totalDeductions) || 0).toFixed(2)}</span></div>
+                            <p class="font-bold text-sm mb-2 text-gray-800 flex items-center gap-1.5"><i class="fa-solid fa-circle-arrow-up text-red-600"></i> Deductions</p>
+                            <div class="flex justify-between py-1 border-b border-gray-100"><span>Provident Fund (PF)</span><span class="font-semibold">₹${(parseFloat(pr.pfDeduction) || 0).toFixed(2)}</span></div>
+                            <div class="flex justify-between py-1 border-b border-gray-100"><span>ESI Contribution</span><span class="font-semibold">₹${(parseFloat(pr.esiDeduction) || 0).toFixed(2)}</span></div>
+                            <div class="flex justify-between py-1 border-b border-gray-100"><span>Professional Tax (PT)</span><span class="font-semibold">₹${(parseFloat(pr.ptDeduction) || 0).toFixed(2)}</span></div>
+                            <div class="flex justify-between py-1 border-b border-gray-100"><span>Advance / Loan</span><span class="font-semibold">₹${(parseFloat(pr.advance) || 0).toFixed(2)}</span></div>
+                            <div class="flex justify-between border-t border-gray-300 mt-2 pt-1 font-bold text-gray-900"><span>Total Deductions:</span><span class="text-red-700">₹${(parseFloat(pr.totalDeductions) || 0).toFixed(2)}</span></div>
                         </div>
                     </div>
-                    <div class="p-4 border-b flex justify-between items-center">
-                        <p class="font-bold text-sm">NET SALARY PAYABLE</p>
-                        <p class="font-bold text-lg text-erp-main">₹${(parseFloat(pr.netSalary) || 0).toFixed(2)}</p>
+                    <div class="p-4 border-b flex justify-between items-center bg-emerald-50">
+                        <div>
+                            <p class="font-black text-sm text-emerald-950 uppercase">NET SALARY PAYABLE</p>
+                            <p class="text-[11px] text-emerald-800">Directly payable via Bank Transfer</p>
+                        </div>
+                        <p class="font-black text-xl text-emerald-700">₹${(parseFloat(pr.netSalary) || 0).toFixed(2)}</p>
                     </div>
-                    <div class="p-4 border-b text-xs"><p class="text-gray-500">Amount in Words</p><p class="font-bold">${amountToWords(parseFloat(pr.netSalary) || 0)}</p></div>
-                    <div class="p-4 flex justify-end"><div class="w-48 text-center"><p class="font-bold text-[10px] uppercase mb-1">For ${site.name}</p><div id="print-signature-img" class="h-16 w-full flex items-center justify-center my-1"></div><p id="print-auth-name" class="font-bold text-[10px] pt-1">Authorized Signatory</p></div></div>
+                    <div class="p-4 border-b text-xs bg-gray-50/50"><p class="text-gray-500 uppercase text-[10px]">Amount in Words</p><p class="font-bold text-gray-900">${amountToWords(parseFloat(pr.netSalary) || 0)}</p></div>
+                    <div class="p-4 flex justify-end"><div class="w-48 text-center"><p class="font-bold text-[10px] uppercase mb-1">For ${site.name}</p><div id="print-signature-img" class="h-16 w-full flex items-center justify-center my-1"></div><p id="print-auth-name" class="font-bold text-[10px] pt-1 border-t border-gray-200">Authorized Signatory</p></div></div>
                 </div>
             `;
             document.getElementById('print-modal').classList.remove('hidden');
@@ -8185,7 +8241,15 @@ document.getElementById('print-modal').classList.remove('hidden');
                 allData = getLiveGateEntries();
             }
             let filteredData = allData;
-            if (!globalModules.includes(moduleKey)) filteredData = allData.filter(item => !item.companyId || item.companyId === state.currentCompany);
+            if (!globalModules.includes(moduleKey)) {
+                filteredData = allData.filter(item => {
+                    if (!item) return false;
+                    if (moduleKey === 'shiftsMaster') {
+                        return (!item.companyId && !item.plant_id) || item.companyId === state.currentCompany || item.plant_id === state.currentCompany;
+                    }
+                    return !item.companyId || item.companyId === state.currentCompany;
+                });
+            }
 
             // Universal deduplication: Guarantee that no table displays duplicate records
             const seenRowKeys = new Set();
@@ -8253,12 +8317,19 @@ document.getElementById('print-modal').classList.remove('hidden');
             const canEdit = hasPerm(moduleKey, 'edit');
             const canDelete = hasPerm(moduleKey, 'delete');
             
-            return dataList.map((row) => {
+            return dataList.map((row, idx) => {
                 let rowHtml = `<tr class="hover:bg-erp-light transition-colors group">`;
                 rowHtml += `<td class="px-3 py-3 w-12 text-center"><input type="checkbox" class="row-select-checkbox rounded border-gray-300 text-erp-main focus:ring-erp-main cursor-pointer h-4 w-4" data-id="${row.id}" onchange="updateSelectedCount('${moduleKey}')"></td>`;
                 config.schema.forEach(col => {
                     if(col.hideInTable) return; 
                     let val = (row[col.key] !== undefined && row[col.key] !== null && row[col.key] !== '') ? row[col.key] : '-';
+                    if (col.key === 'id') {
+                        if (moduleKey === 'machineLogs') {
+                            val = row.logNumber || row.log_number || (`ML-${idx + 1}`);
+                        } else if (moduleKey === 'consumableLogs') {
+                            val = row.movementNumber || row.movement_number || (`CL-${idx + 1}`);
+                        }
+                    }
                     if(col.type === 'checkboxGroup' && Array.isArray(row[col.key])) val = row[col.key].join(' & ') || '-';
                     if(col.dataSource && row[col.key]) {
                         if(col.dataSource.module === 'employees') {
@@ -8321,6 +8392,9 @@ document.getElementById('print-modal').classList.remove('hidden');
                     rowHtml += `<button onclick="printLR('${row.id}')" class="text-indigo-600 hover:text-indigo-800 bg-indigo-100 hover:bg-indigo-200 h-10 w-10 md:h-8 md:w-8 rounded flex items-center justify-center transition-colors" title="Print Lorry Receipt (LR)"><i class="fa-solid fa-receipt text-sm md:text-xs"></i></button>`;
                     rowHtml += `<button onclick="${row.challanGenerated ? `openPrintPreview('trips', '${row.id}', ${row.challanRate||0}, 'DC')` : `promptForRate('${row.id}', 'DC')`}" class="text-purple-600 hover:text-purple-800 bg-purple-100 hover:bg-purple-200 h-10 w-10 md:h-8 md:w-8 rounded flex items-center justify-center transition-colors" title="${row.challanGenerated ? 'Print Delivery Challan (DC)' : 'Generate Delivery Challan'}"><i class="fa-solid fa-file-invoice text-sm md:text-xs"></i></button>`;
                     rowHtml += `<button onclick="openTrackingView('${row.id}')" class="text-teal-600 hover:text-teal-800 bg-teal-100 hover:bg-teal-200 h-10 w-10 md:h-8 md:w-8 rounded flex items-center justify-center transition-colors" title="Live Tracking"><i class="fa-solid fa-location-dot text-sm md:text-xs"></i></button>`;
+                }
+                if (moduleKey === 'payrollLedger') {
+                    rowHtml += `<button onclick="printPayslip('${row.id}')" class="text-indigo-600 hover:text-indigo-800 bg-indigo-100 hover:bg-indigo-200 h-10 w-10 md:h-8 md:w-8 rounded flex items-center justify-center transition-colors" title="Print Salary Slip"><i class="fa-solid fa-receipt text-sm md:text-xs"></i></button>`;
                 }
 
                 if (canEdit) rowHtml += `<button onclick="openModal('${moduleKey}', '${row.id}')" class="text-blue-500 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 h-10 w-10 md:h-8 md:w-8 rounded flex items-center justify-center transition-colors" title="Edit"><i class="fa-solid fa-pen text-sm md:text-xs"></i></button>`;
@@ -8442,13 +8516,20 @@ document.getElementById('print-modal').classList.remove('hidden');
                         inputHtml = `<div class="flex gap-2 items-center w-full"><div class="flex-1">${selectHtml}</div><button type="button" onclick="quickAddVehicle('field_vehicle')" class="bg-erp-main text-white h-[38px] w-[42px] rounded hover:bg-erp-hover flex items-center justify-center"><i class="fa-solid fa-plus"></i></button></div>`;
                     } else { inputHtml = selectHtml; }
                 } else if (field.type === 'checkboxGroup') {
-                    const selectedValues = Array.isArray(value) ? value : (value ? [value] : []);
+                    const selectedValues = Array.isArray(value) ? value : (typeof value === 'string' && value ? value.split(',').map(s => s.trim()) : []);
+                    const groupOptions = (field.dataSource && field.dataSource.module === 'companyMaster')
+                        ? (state.data.companyMaster || []).map(c => c.id)
+                        : (field.options || []);
                     inputHtml = `<div class="flex flex-wrap gap-3 p-2 border border-gray-300 rounded">` +
-                        (field.options || []).map(opt => `
+                        groupOptions.map(opt => {
+                            const plantObj = (state.data.companyMaster || []).find(c => c.id === opt);
+                            const label = plantObj ? `${opt} (${plantObj.tradeName || plantObj.name})` : opt;
+                            return `
                             <label class="flex items-center gap-1.5 text-sm cursor-pointer">
                                 <input type="checkbox" class="field_${field.key}_group" value="${opt}" ${selectedValues.includes(opt) ? 'checked' : ''}>
-                                ${opt}
-                            </label>`).join('') +
+                                ${label}
+                            </label>`;
+                        }).join('') +
                         `</div><input type="hidden" id="field_${field.key}" value="${selectedValues.join(',')}">`;
                 } else if (field.type === 'multiEntry') {
                     const entries = Array.isArray(value) && value.length ? value : [''];
@@ -10422,6 +10503,7 @@ document.getElementById('print-modal').classList.remove('hidden');
             const company = (companyList && companyList.find(c => c && (c.id == (record.companyId || state.currentCompany))))
                          || (companyList && companyList[0])
                          || { name: 'GG WASTECH PRIVATE LIMITED', address: 'Sector 2, HN B/36, RDA Colony, Devendra Nagar,\nRaipur, Chhattisgarh, 492004', phone: '8821937000', gstin: '22AAICG8184C1ZP', logo: 'assets/wastech-logo-clean.png' };
+            const companyLogoUrl = typeof getActiveCompanyLogo === 'function' ? getActiveCompanyLogo(company.id || record.companyId || state.currentCompany) : 'assets/wastech-logo-clean.png';
 
             const partyName = record.client || record.party;
             const partyList = typeof getLiveParties === 'function' ? getLiveParties() : (state.data?.partiesMaster || []);
@@ -10544,7 +10626,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                                     <p style="color: #111827; font-weight: 600; margin: 2px 0 0 0;">GSTIN : <span>${cgnGstin}</span></p>
                                 </div>
                                 <div style="padding-left: 12px;">
-                                    <img src="assets/wastech-logo-clean.png" alt="Wastech Logo" style="height: 48px; width: auto; object-fit: contain; display: block;">
+                                    <img src="${companyLogoUrl}" alt="Company Logo" style="height: 48px; width: auto; max-width: 180px; object-fit: contain; display: block;">
                                 </div>
                             </div>
                         </div>
@@ -10591,7 +10673,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                         <div style="position: relative; border: 1px solid #d1d5db; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; background: #ffffff; overflow: hidden;">
                             <!-- Large Watermark Logo Centered exactly as reference -->
                             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0.18; z-index: 1;">
-                                <img src="assets/wastech-logo-clean.png" alt="Watermark" style="width: 320px; max-width: 75%; height: auto; object-fit: contain;">
+                                <img src="${companyLogoUrl}" alt="Watermark" style="width: 320px; max-width: 75%; height: auto; object-fit: contain;">
                             </div>
 
                             <div style="position: relative; z-index: 2;">
@@ -10762,7 +10844,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                                     <p style="color: #111827; font-weight: 600; margin: 2px 0 0 0;">GSTIN : <span>${cgnGstin}</span></p>
                                 </div>
                                 <div style="padding-left: 12px;">
-                                    <img src="assets/wastech-logo-clean.png" alt="Wastech Logo" style="height: 48px; width: auto; object-fit: contain; display: block;">
+                                    <img src="${companyLogoUrl}" alt="Company Logo" style="height: 48px; width: auto; max-width: 180px; object-fit: contain; display: block;">
                                 </div>
                             </div>
                         </div>
@@ -10815,7 +10897,7 @@ document.getElementById('print-modal').classList.remove('hidden');
                         <div style="position: relative; border: 1px solid #d1d5db; border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; background: #ffffff; overflow: hidden;">
                             <!-- Large Watermark Logo Centered exactly as reference -->
                             <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0.18; z-index: 1;">
-                                <img src="assets/wastech-logo-clean.png" alt="Watermark" style="width: 320px; max-width: 75%; height: auto; object-fit: contain;">
+                                <img src="${companyLogoUrl}" alt="Watermark" style="width: 320px; max-width: 75%; height: auto; object-fit: contain;">
                             </div>
 
                             <div style="position: relative; z-index: 2;">

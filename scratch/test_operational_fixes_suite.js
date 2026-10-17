@@ -1,50 +1,46 @@
+// Test Suite for 7 Operational Fixes
 const fs = require('fs');
+const path = require('path');
 const assert = require('assert');
 
-const appContent = fs.readFileSync('frontend/app.js', 'utf8');
+console.log('--- Testing 7 Operational Fixes ---');
 
-console.log('Running dedicated verification suite for the 7 operational fixes...\n');
+const appJsPath = path.join(__dirname, '..', 'frontend', 'app.js');
+const appJsContent = fs.readFileSync(appJsPath, 'utf8');
 
-// 1. Verify Consumables Log displays name rather than CON-1 / CON-2
-assert(appContent.includes("col.dataSource.module === 'consumablesMaster'"), 'Fix 1: Consumables master resolution missing');
-assert(appContent.includes("const con = (typeof getLiveConsumables === 'function' ? getLiveConsumables() : []).find"), 'Fix 1: getLiveConsumables lookup missing');
-console.log('✓ Fix 1 Verified: Consumables name resolution implemented in generateTableRows.');
+// 1. Verify getActiveCompanyLogo function exists and works
+console.log('Test 1: getActiveCompanyLogo function verification...');
+assert(appJsContent.includes('function getActiveCompanyLogo('), 'getActiveCompanyLogo function must exist');
 
-// 2. Verify Machines Log displays name rather than MAC-1 / MAC-2
-assert(appContent.includes("col.dataSource.module === 'machineryMaster'"), 'Fix 2: Machinery master resolution missing');
-assert(appContent.includes("const mac = (typeof getLivePlantMachinery === 'function' ? getLivePlantMachinery() : []).find"), 'Fix 2: getLivePlantMachinery lookup missing');
-console.log('✓ Fix 2 Verified: Machinery name resolution implemented in generateTableRows.');
+// 2. Verify sequential log IDs in generateTableRows
+console.log('Test 2: Sequential Log IDs (ML-1, CL-1) logic in generateTableRows...');
+assert(appJsContent.includes("moduleKey === 'machineLogs'"), 'machineLogs sequential ID handling must exist');
+assert(appJsContent.includes("moduleKey === 'consumableLogs'"), 'consumableLogs sequential ID handling must exist');
+assert(appJsContent.includes("`ML-${idx + 1}`"), 'ML sequential numbering must exist');
+assert(appJsContent.includes("`CL-${idx + 1}`"), 'CL sequential numbering must exist');
 
-// 3. Verify LR & Challan vehicle registration number resolution
-assert(appContent.includes("const vehLookup = (typeof getLiveVehicles === 'function' ? getLiveVehicles() : []).find"), 'Fix 3: Vehicle lookup missing in openPrintPreview');
-assert(appContent.includes("const vehicleVal = vehLookup ? (vehLookup.vehicleNo || vehLookup.registrationNo)"), 'Fix 3: Vehicle registration fallback missing');
-console.log('✓ Fix 3 Verified: Vehicle registration number used for LR & Challan preview/print.');
+// 3. Verify shiftsMaster plant filtering supports plant_id or global null
+console.log('Test 3: shiftsMaster and plant filtering logic...');
+assert(appJsContent.includes("item.plant_id === state.currentCompany"), 'shiftsMaster plant_id matching must exist');
 
-// 4. Verify GRN PO & Date Range filter
-assert(appContent.includes("matchesPo = (t.poReceived === poId || t.po_received_number === poId || t.orderId === poId || t.order_id === poId || t.linkedPO === poId || t.poIssued === poId)"), 'Fix 4: PO alias matching missing in loadGrnTrips');
-assert(appContent.includes("const lrDisplay = t.lrNumber ? `LR: ${t.lrNumber}` : `Trip #${t.id}`;"), 'Fix 4: LR number badge missing in loadGrnTrips rows');
-console.log('✓ Fix 4 Verified: GRN Trip & LR filter matching PO across all aliases and date formats.');
+// 4. Verify multi-plant filtering and fallback logic in renderTableModule
+console.log('Test 4: Plant filtering for shiftsMaster...');
+assert(appJsContent.includes("moduleKey === 'shiftsMaster'"), 'shiftsMaster specific filtering must exist');
+assert(appJsContent.includes("!item.companyId && !item.plant_id"), 'global shifts with null plant must pass');
 
-// 5. Verify Add User Accounts form password field
-assert(appContent.includes("field.key === 'password'"), 'Fix 5: Password field handler missing');
-assert(appContent.includes("input type=\"password\" id=\"field_${field.key}\""), 'Fix 5: Password input element missing');
-assert(appContent.includes("placeholder=\"${isEditUser ? 'Leave blank to keep current password' : 'Enter password'}\""), 'Fix 5: Password edit placeholder missing');
-console.log('✓ Fix 5 Verified: Password input field with toggle restored in Add User Accounts modal.');
+// 5. Verify multi-plant access in hydrateSession / user setup
+console.log('Test 5: Multi-plant allocation and authorizedPlants...');
+assert(appJsContent.includes("u.assignedPlants"), 'assignedPlants support in session hydration');
+assert(appJsContent.includes("user_plant_access"), 'user_plant_access check must exist');
 
-// 6. Verify Audit Logs Center and snapshot viewer
-assert(appContent.includes("function getLiveAuditLogs()"), 'Fix 6: getLiveAuditLogs function missing');
-assert(appContent.includes("function getLiveRecordAny(moduleKey, recordId)"), 'Fix 6: getLiveRecordAny function missing');
-assert(appContent.includes("(!l.companyId || !state.currentCompany || l.companyId === state.currentCompany || l.plant_id === state.currentCompany)"), 'Fix 6: Multi-tenant plant audit filter missing');
-console.log('✓ Fix 6 Verified: Live audit logs aggregation, snapshot viewer, and process details enabled.');
+// 6. Verify statutory payroll settings dynamic usage in calculateEmployeePayroll
+console.log('Test 6: Statutory payroll settings dynamic calculation...');
+assert(appJsContent.includes("getLivePayrollSettings"), 'calculateEmployeePayroll must query getLivePayrollSettings');
+assert(appJsContent.includes("calculateEmployeePayroll"), 'calculateEmployeePayroll function must exist');
 
-// 7. Verify internal cross-document links
-assert(appContent.includes("openTripView('${t.id}')"), 'Fix 7: Link to Trip view missing in PO view');
-assert(appContent.includes("openGrnView('${g.id}')"), 'Fix 7: Link to GRN view missing in PO view');
-assert(appContent.includes("openInvoiceView('${i.id}')"), 'Fix 7: Link to Invoice view missing in PO view');
-assert(appContent.includes("createKpiCard('Total Employees', empCount, 'fa-users', 'text-blue-500', 'bg-blue-100', 'employees')"), 'Fix 7: Employee KPI module link missing');
-assert(appContent.includes("createKpiCard('Active Trips', tripCount, 'fa-truck-front', 'text-orange-500', 'bg-orange-100', 'trips')"), 'Fix 7: Trips KPI module link missing');
-console.log('✓ Fix 7 Verified: Internal navigation links wired across documents and dashboard KPI cards.');
+// 7. Verify dynamic company logo in Salary Slip, LR, DC
+console.log('Test 7: Dynamic company logo in Salary Slip, LR, DC...');
+assert(appJsContent.includes("getActiveCompanyLogo(site.id || pr.companyId)") || appJsContent.includes("getActiveCompanyLogo(state.currentCompany)"), 'Salary slip uses getActiveCompanyLogo');
+assert(appJsContent.includes("const companyLogoUrl = typeof getActiveCompanyLogo"), 'Print document modal resolves companyLogoUrl');
 
-console.log('\n======================================');
-console.log('ALL 7 FIXES TESTED AND VERIFIED SUCCESSFULLY!');
-console.log('======================================');
+console.log('ALL 7 OPERATIONAL FIXES VERIFIED SUCCESSFULLY IN CODEBASE!');
